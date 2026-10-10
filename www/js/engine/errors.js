@@ -55,6 +55,9 @@ export function classifyHttp(provider, status, bodyText, headers) {
     if (m) retryAfterMs = parseDurationMs(m[1]);
   }
   const opts = { status, retryAfterMs, provider };
+  // OpenAI: out of credit is a billing problem, not a speed limit; a model your project can't use is just skipped
+  if (/insufficient_quota|exceeded your current quota/i.test(bodyText || "")) return new ApiError(`${label(provider)} credit has run out. Add credit in your ${label(provider)} billing page.`, { ...opts, kind: "quota", retryAfterMs: 30 * 60000 });
+  if (status === 403 && /access to model|model_not_found/i.test(message + (bodyText || ""))) return new ApiError(`Model unavailable: ${message}`, { ...opts, kind: "model" });
   if (status === 401) return new ApiError(`${label(provider)} rejected the API key. ${message}`, { ...opts, kind: "auth" });
   if (status === 403) return new ApiError(`${label(provider)} refused access (key or region). ${message}`, { ...opts, kind: "auth" });
   if (status === 404 || /model_not_found|decommissioned|no longer supported|does not exist/i.test(message))
@@ -71,5 +74,5 @@ export function classifyHttp(provider, status, bodyText, headers) {
 }
 
 export function label(provider) {
-  return provider === "groq" ? "Groq" : provider === "gemini" ? "Gemini" : provider || "Service";
+  return provider === "groq" ? "Groq" : provider === "gemini" ? "Gemini" : provider === "openai" ? "OpenAI" : provider || "Service";
 }

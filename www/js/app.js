@@ -4,6 +4,7 @@ import { Emitter, LectureEngine } from "./engine/session-engine.js";
 import { Router } from "./engine/router.js";
 import { GroqProvider } from "./providers/groq.js";
 import { GeminiProvider } from "./providers/gemini.js";
+import { OpenAIProvider } from "./providers/openai.js";
 import { Chunker } from "./audio/chunker.js";
 import { MicCapture } from "./audio/capture.js";
 import { DEFAULT_SETTINGS, DELAY_PRESETS, loadSettings, saveSettings } from "./settings.js";
@@ -58,7 +59,7 @@ export class App extends Emitter {
   }
 
   update(patch) {
-    const keysChanged = "groqKey" in patch || "geminiKey" in patch || "preferGemini" in patch || "sttEngine" in patch || "llmEngine" in patch || "modelStt" in patch || "modelLlm" in patch || "modelGemini" in patch;
+    const keysChanged = "groqKey" in patch || "geminiKey" in patch || "openaiKey" in patch || "preferGemini" in patch || "sttEngine" in patch || "llmEngine" in patch || "modelStt" in patch || "modelLlm" in patch || "modelGemini" in patch || "modelOpenai" in patch;
     Object.assign(this.settings, patch);
     saveSettings(this.settings);
     if ("groqPaid" in patch || "geminiPaid" in patch) this._syncPlan();
@@ -68,11 +69,11 @@ export class App extends Emitter {
   }
 
   _syncPlan() {
-    this.usage.paid = { groq: !!this.settings.groqPaid, gemini: !!this.settings.geminiPaid };
+    this.usage.paid = { groq: !!this.settings.groqPaid, gemini: !!this.settings.geminiPaid, openai: true };
   }
 
   hasKey() {
-    return !!(this.settings.groqKey.trim() || this.settings.geminiKey.trim());
+    return !!(this.settings.groqKey.trim() || this.settings.geminiKey.trim() || this.settings.openaiKey.trim());
   }
 
   buildRouter() {
@@ -80,10 +81,11 @@ export class App extends Emitter {
     const providers = {};
     if (s.groqKey.trim()) providers.groq = new GroqProvider(s.groqKey);
     if (s.geminiKey.trim()) providers.gemini = new GeminiProvider(s.geminiKey);
+    if (s.openaiKey.trim()) providers.openai = new OpenAIProvider(s.openaiKey);
     return new Router(providers, {
       preferGemini: s.preferGemini && !!providers.gemini,
       engines: { stt: s.sttEngine, llm: s.llmEngine },
-      overrides: { stt: s.modelStt.trim(), llm: s.modelLlm.trim(), gemini: s.modelGemini.trim() },
+      overrides: { stt: s.modelStt.trim(), llm: s.modelLlm.trim(), gemini: s.modelGemini.trim(), openai: s.modelOpenai.trim() },
       onNotice: (n) => this._notice(n),
       usage: this.usage,
     });

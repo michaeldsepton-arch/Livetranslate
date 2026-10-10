@@ -102,3 +102,119 @@ test("level read-out flags silence, very quiet and clipped recordings", () => {
   assert.match(describeLevel(speech(2, 1)).text, /clipping/);
   assert.equal(describeLevel(speech(2, 0.25)).ok, true);
 });
+
+// ---- OpenAI ----
+import { OpenAIProvider } from "../www/js/providers/openai.js";
+import { pickOpenAiModels } from "../www/js/providers/models.js";
+import { classifyHttp, ApiError } from "../www/js/engine/errors.js";
+import { openaiCost, limitsFor } from "../www/js/engine/limits.js";
+import { translatorCandidates, compareTranslators } from "../www/js/engine/compare.js";
+
+const res = (status, body) => ({ status, ok: status >= 200 && status < 300, text: typeof body === "string" ? body : JSON.stringify(body), headers: { get: () => null } });
+
+test("OpenAI transcription: gpt-4o models use json, whisper-1 uses verbose_json, prompt and language are passed", async () => {
+  const seen = [];
+  const http = async (url, opts) => (seen.push({ url, opts }), res(200, { text: "بسم الله", language: "arabic", duration: 4 }));
+  const o = new OpenAIProvider(" sk-test ", http);
+  const wav = new Blob(["x"], { type: "audio/wav" });
+  const a = await o.transcribe(wav, { model: "gpt-4o-transcribe", language: "ar", prompt: "مقدمة" });
+  await o.transcribe(wav, { model: "whisper-1" });
+  assert.equal(seen[0].url, "https://api.openai.com/v1/audio/transcriptions");
+  assert.equal(seen[0].opts.headers.Authorization, "Bearer sk-test");
+  assert.equal(seen[0].opts.body.get("response_format"), "json");
+  assert.equal(seen[0].opts.body.get("language"), "ar");
+  assert.equal(seen[0].opts.body.get("prompt"), "مقدمة");
+  assert.equal(seen[1].opts.body.get("response_format"), "verbose_json");
+  assert.equal(a.text, "بسم الله");
+});
+
+test("OpenAI chat: normal models get a temperature; reasoning models get minimal effort and retry plainer on rejection", async () => {
+  const bodies = [];
+  let fail = 1;
+  const http = async (url, opts) => {
+    const b = JSON.parse(opts.body);
+    bodies.push(b);
+    if (b.model === "gpt-5-mini" && b.reasoning_effort === "minimal" && fail-- > 0) return res(400, { error: { message: "Unsupported value: reasoning_effort 'minimal'" } });
+    return res(200, { choices: [{ message: { content: "Hello" } }], usage: { total_tokens: 321 } });
+  };
+  const o = new OpenAIProvider("k", http);
+  assert.equal(await o.chat({ model: "gpt-4.1", system: "s", user: "u" }), "Hello");
+  assert.equal(bodies[0].temperature, 0.2);
+  assert.equal(bodies[0].reasoning_effort, undefined);
+  assert.equal(o.lastUsage.tokens, 321);
+  await o.chat({ model: "gpt-5-mini", system: "s", user: "u" });
+  const g = bodies.filter((b) => b.model === "gpt-5-mini");
+  assert.deepEqual(g.map((b) => b.reasoning_effort), ["minimal", "low"]);
+  assert.ok(g.every((b) => b.temperature === undefined), "reasoning models never get a custom temperature");
+  assert.ok(g[0].max_completion_tokens > 900, "reasoning tokens need headroom");
+});
+
+test("OpenAI errors: out of credit is a quota problem, a model the project can't use is skipped, a bad key is auth", () => {
+  const out = classifyHttp("openai", 429, JSON.stringify({ error: { code: "insufficient_quota", message: "You exceeded your current quota, please check your plan and billing details." } }), null);
+  assert.equal(out.kind, "quota");
+  assert.match(out.message, /credit has run out/);
+  assert.equal(classifyHttp("openai", 403, JSON.stringify({ error: { message: "Project `proj_1` does not have access to model `gpt-4.1`" } }), null).kind, "model");
+  assert.equal(classifyHttp("openai", 401, JSON.stringify({ error: { message: "Incorrect API key provided" } }), null).kind, "auth");
+  assert.equal(classifyHttp("openai", 429, JSON.stringify({ error: { message: "Rate limit reached for gpt-4.1. Please try again in 1.2s." } }), null).kind, "rate");
+});
+
+test("OpenAI model choice prefers gpt-4o-transcribe and fast non-reasoning chat models, falls back to whatever chat model exists", () => {
+  assert.deepEqual(pickOpenAiModels(["whisper-1", "gpt-4o-transcribe", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "tts-1"]), { stt: ["gpt-4o-transcribe", "whisper-1"], llm: ["gpt-4.1", "gpt-4.1-mini", "gpt-4o"] });
+  const odd = pickOpenAiModels(["whisper-1", "gpt-9-turbo", "gpt-9-realtime", "text-embedding-3"]);
+  assert.deepEqual(odd.llm, ["gpt-9-turbo"]);
+  assert.deepEqual(pickOpenAiModels(null).stt.slice(0, 2), ["gpt-4o-transcribe", "whisper-1"]);
+});
+
+test("OpenAI can be chosen first for either stage, and is only a last-resort fallback otherwise", () => {
+  const all = { groq: P, gemini: P, openai: P };
+  const mkAll = (engines) => { const r = mk(all, engines); r.models.openai = { stt: ["gpt-4o-transcribe", "whisper-1"], llm: ["gpt-4.1", "gpt-4.1-mini"] }; return r; };
+  assert.deepEqual(ids(mkAll({ stt: "openai", llm: "openai" }), "stt").slice(0, 3), ["openai:gpt-4o-transcribe", "openai:whisper-1", "groq:whisper-large-v3"]);
+  assert.equal(ids(mkAll({ llm: "openai" }), "llm")[0], "openai:gpt-4.1");
+  assert.equal(ids(mkAll({}), "llm").at(-1), "openai:gpt-4.1-mini", "auto never starts with the paid service");
+  assert.equal(ids(mkAll({ stt: "groq-turbo" }), "stt").at(-1), "openai:whisper-1");
+  const only = mk({ openai: P });
+  only.models.openai = { stt: ["gpt-4o-transcribe"], llm: ["gpt-4.1"] };
+  assert.deepEqual(ids(only, "llm"), ["openai:gpt-4.1"]);
+});
+
+test("out of OpenAI credit moves on to the free services instead of stalling", async () => {
+  const r = mk({ groq: P, openai: P }, { llm: "openai" });
+  r.models.openai = { stt: ["gpt-4o-transcribe"], llm: ["gpt-4.1"] };
+  const used = [];
+  await r.run("llm", async (it) => {
+    used.push(it.id);
+    if (it.provider === "openai") throw new ApiError("credit", { kind: "quota", retryAfterMs: 1800000 });
+    return "ok";
+  });
+  assert.deepEqual(used, ["openai:gpt-4.1", "groq:big"]);
+});
+
+test("OpenAI cost estimate and no rationing", () => {
+  assert.ok(Math.abs(openaiCost("openai:gpt-4o-transcribe", { audioSec: 3600 }) - 0.36) < 1e-9);
+  assert.ok(Math.abs(openaiCost("openai:gpt-4o-mini-transcribe", { audioSec: 3600 }) - 0.18) < 1e-9);
+  assert.ok(Math.abs(openaiCost("openai:gpt-4.1", { tokens: 600000 }) - 1.38) < 1e-9);
+  assert.ok(openaiCost("openai:some-new-model", { tokens: 1e6 }) > 0);
+  assert.deepEqual(limitsFor("openai:gpt-4.1"), {}, "no free-tier limits, so no pacing or warnings");
+});
+
+test("translator comparison: one row per service, errors reported, usage counted", async () => {
+  const groq = fakeProvider({ name: "groq", chat: () => "Groq says hello" });
+  const gemini = fakeProvider({ name: "gemini", chat: () => { throw Object.assign(new Error("down"), { kind: "server" }); } });
+  const openai = fakeProvider({ name: "openai", chat: () => "OpenAI says hello" });
+  openai.lastUsage = { tokens: 900 };
+  const router = mk({ groq, gemini, openai });
+  router.models.openai = { stt: ["gpt-4o-transcribe"], llm: ["gpt-4.1"] };
+  assert.deepEqual(translatorCandidates(router).map((c) => c.key), ["tr:groq", "tr:gemini", "tr:openai"]);
+  const usage = new UsageTracker({ storage: null });
+  const rows = await compareTranslators({ router, text: "الحمد لله", settings: DEFAULT_SETTINGS, usage });
+  assert.equal(rows[0].en, "Groq says hello");
+  assert.ok(rows[1].error && !rows[1].en);
+  assert.equal(rows[2].en, "OpenAI says hello");
+  assert.equal(usage.sumSince("openai:gpt-4.1", 2, 0), 900);
+});
+
+test("speech test includes OpenAI's speech models when a key is set", () => {
+  const r = mk({ groq: P, openai: P });
+  r.models.openai = { stt: ["gpt-4o-transcribe", "whisper-1", "gpt-4o-mini-transcribe"], llm: ["gpt-4.1"] };
+  assert.deepEqual(sttCandidates(r).map((c) => c.key), ["large", "large-nohint", "turbo", "openai:gpt-4o-transcribe", "openai:whisper-1"]);
+});

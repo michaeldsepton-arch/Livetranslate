@@ -20,7 +20,7 @@ and get confused when an English interpreter starts speaking.
 | **A continuous script for the whole lecture** | Sentences flow into paragraphs with timestamps; the screen follows the lecture, and you can scroll back without losing your place. |
 | **An English interpreter speaks too** | Every audio chunk is language-detected. English is shown as **Interpreter** text (italic, gold bar) and is never re-translated; Arabic is translated. The interpreter's words are also given to the translator as context for the next Arabic passage. |
 | **Save the transcript as a text file** | When you stop, a `.txt` is written to **Downloads/Lisan** (and kept in the in-app **Library**). Share, copy, rename, re-export or delete any lecture later (delete has an Undo; long-press to select several). |
-| **Free** | Uses the free tiers of Groq (Whisper + an open LLM) and, optionally, Google Gemini. No subscription, no card. You choose the engine for hearing (Whisper large-v3, Whisper **turbo**, or **Gemini**) and for translating (Groq or Gemini) separately in *Settings → Connection*, and the **Speech test** lets you compare them on the same clip. |
+| **Free** | Uses the free tiers of Groq (Whisper + an open LLM) and, optionally, Google Gemini. No subscription, no card. You choose the engine for hearing (Whisper large-v3, Whisper **turbo**, **Gemini** or **OpenAI**) and for translating (Groq, Gemini or OpenAI) separately in *Settings → Connection*, and the **Speech test** lets you compare them on the same clip. **OpenAI is optional and paid** (no free tier): add a few dollars of credit and it is used only when you choose it, or when the free services run out. |
 | **Qur'an recitation** | Recited verses are recognised against the full text of the Qur'an: the exact Arabic (with diacritics) replaces any mis-heard words, the surah and verse are tagged (e.g. *Al-Masad 111:2–5*), and the translator is told it is translating the Qur'an so it gives the true meaning. Works for verses quoted inside a lecture too. Can be switched off in Settings. |
 | **Know your free limits** | *Settings → Free allowance* (and a chip while recording) shows, per model, how much of the free Groq / Gemini allowance this phone has used — speech minutes this hour and today, requests, tokens — with a warning at 80 % and 95 %, an estimate of how long it will last at your current pace, and links to the official usage pages. It also paces requests so short chunks don't hit the per-minute limit. |
 | **Only words are transliterated** | Single Islamic terms and names stay as words (taqwa, salah, hadith…) plus a few short expressions (Alhamdulillah, InshaAllah…). Sentences, verses and supplications are always translated; if the translator ever transliterates a sentence it is asked again. |
@@ -45,6 +45,8 @@ Updates install straight over the old version and keep your keys and saved lectu
 2. **Create API key**, copy it.
 3. Paste it into the app. Done.
 
+*Optional, paid:* an OpenAI key from <https://platform.openai.com/api-keys> (add credit under Billing; the minimum is $5, and leaving auto-recharge off means it can never spend more than you loaded). OpenAI has no free tier, but it has no daily wall either, so it suits long days of lectures. Roughly $0.3–1.5 per lecture hour depending on the models (the *Free allowance* screen shows a rough running cost).
+
 *Optional backup:* a free Google Gemini key from <https://aistudio.google.com/apikey> in *Settings → Connection*. If Groq's free
 daily allowance runs out mid-lecture, the app switches over by itself.
 
@@ -62,7 +64,8 @@ daily allowance runs out mid-lecture, the app switches over by itself.
 * No interpreter? Set *Who is speaking?* to **Arabic only** — slightly more accurate.
 * **If the result isn't good, run the Speech test** (*Settings → Speech test*). It records 8 seconds the same way a lecture does, plays it
   back (so you hear exactly what Lisan hears), and shows what Whisper large-v3, large-v3 *without* the vocabulary hint, Whisper turbo and Gemini
-  each make of that clip, with the English each would give. Quiet, clipped or echoey audio shows up in the level read-out; if every engine
+  each make of that clip (plus OpenAI's gpt-4o-transcribe and Whisper-1 if you added a key), with the English each would give, and then the same Arabic
+  through each service's *translator* side by side. Quiet, clipped or echoey audio shows up in the level read-out; if every engine
   is poor the audio is the problem (move closer, try turning Noise suppression off), and if only one is, switch the engine in *Connection*.
 * Try **Try a demo lecture** on the home screen to see exactly how it looks, no key needed.
 
@@ -79,8 +82,9 @@ daily allowance runs out mid-lecture, the app switches over by itself.
                                                                         ─► committed once, fades in, never changes
 ```
 
-* **Failover.** Every model has its own free allowance. By default the router tries Whisper large-v3 → large-v3-turbo → Gemini, and the best
-  available LLMs in order; *Settings → Connection* lets you put turbo or Gemini first for speech and Groq or Gemini first for translation.
+* **Failover.** Every model has its own free allowance. By default the router tries Whisper large-v3 → large-v3-turbo → Gemini → OpenAI, and the best
+  available LLMs in order; *Settings → Connection* lets you put turbo, Gemini or OpenAI first for speech and Groq, Gemini or OpenAI first for translation.
+  OpenAI is only ever a last resort unless you choose it. If its credit runs out, Lisan carries on with the free services.
   A daily limit on one just moves to the next; a per-minute limit waits and retries; a rejected key is reported.
 * **Models are discovered at start-up** (`/models`), so retired models never break the app. You can override them under *Advanced*.
 * **Crash-proof.** The transcript is auto-saved a moment after every sentence; an interrupted lecture is recovered on next launch.

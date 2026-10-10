@@ -21,6 +21,9 @@ export function sttCandidates(router) {
     }
     if (turbo) out.push({ key: "turbo", provider: "groq", model: turbo, label: "Whisper large-v3 turbo", hint: true });
   }
+  if (live("openai")) {
+    for (const model of router.models.openai.stt.slice(0, 2)) out.push({ key: `openai:${model}`, provider: "openai", model, label: `OpenAI · ${model}`, hint: true });
+  }
   if (live("gemini") && router.models.gemini.stt.length) {
     const model = router.models.gemini.stt[0];
     out.push({ key: "gemini", provider: "gemini", model, label: `${NICE.gemini} · ${model.replace(/^gemini-/, "")}`, hint: true });
@@ -96,6 +99,50 @@ export async function compareEngines({ router, wav, seconds, settings, usage = n
       }
     }
     row.en = english.get(row.text) || "";
+    row.state = "done";
+    onRow(row);
+  }
+  return rows;
+}
+
+const SHORT = { groq: "Groq", gemini: "Gemini", openai: "OpenAI" };
+
+/** The best translation model of each service you have a key for. */
+export function translatorCandidates(router) {
+  const out = [];
+  for (const provider of ["groq", "gemini", "openai"]) {
+    if (!router.providers[provider] || router.dead.has(provider)) continue;
+    const model = router.models[provider].llm[0];
+    if (model) out.push({ key: `tr:${provider}`, provider, model, label: `${SHORT[provider]} · ${model.replace(/^openai\//, "").replace(/^gemini-/, "")}` });
+  }
+  return out;
+}
+
+/** The same Arabic text through each service's translator, side by side. */
+export async function compareTranslators({ router, text, settings, usage = null, onRow = () => {}, signal, now = () => performance.now() }) {
+  const system = buildSystemPrompt({ termStyle: settings.termStyle, honorifics: settings.honorifics, dialect: settings.dialect });
+  const user = buildUserPrompt({ current: text, context: settings.context || "" });
+  const rows = translatorCandidates(router).map((c) => ({ ...c, state: "waiting", ms: 0, en: "", error: "" }));
+  rows.forEach(onRow);
+  for (const row of rows) {
+    if (signal && signal.aborted) break;
+    row.state = "translating";
+    onRow(row);
+    const t0 = now();
+    try {
+      const out = await router.providers[row.provider].chat({ model: row.model, system, user, signal });
+      row.ms = Math.round(now() - t0);
+      row.en = cleanTranslation(out);
+      if (usage) {
+        const prov = router.providers[row.provider];
+        usage.record(`${row.provider}:${row.model}`, { tokens: (prov.lastUsage && prov.lastUsage.tokens) || 0 });
+      }
+    } catch (err) {
+      const e = ApiError.from(err, row.provider);
+      if (e.kind === "aborted") break;
+      row.ms = Math.round(now() - t0);
+      row.error = e.message || "Failed";
+    }
     row.state = "done";
     onRow(row);
   }

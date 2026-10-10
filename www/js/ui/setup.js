@@ -4,16 +4,18 @@ import { icon } from "./icons.js";
 import { openSheet, toast } from "./overlay.js";
 import { GroqProvider } from "../providers/groq.js";
 import { GeminiProvider } from "../providers/gemini.js";
+import { OpenAIProvider } from "../providers/openai.js";
 
 export const GROQ_KEYS_URL = "https://console.groq.com/keys";
 export const GEMINI_KEYS_URL = "https://aistudio.google.com/apikey";
+export const OPENAI_KEYS_URL = "https://platform.openai.com/api-keys";
 
 /** Checks a key against the service.  Resolves {ok, message}. */
 export async function testKey(provider, key) {
   const k = (key || "").trim();
   if (!k) return { ok: false, message: "Paste a key first" };
   try {
-    const p = provider === "gemini" ? new GeminiProvider(k) : new GroqProvider(k);
+    const p = provider === "gemini" ? new GeminiProvider(k) : provider === "openai" ? new OpenAIProvider(k) : new GroqProvider(k);
     const models = await p.listModels();
     return { ok: true, message: `Key works · ${models.length} models available` };
   } catch (e) {

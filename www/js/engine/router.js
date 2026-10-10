@@ -1,21 +1,21 @@
 // Picks which service/model handles each call and keeps going when one is rate-limited, out of
 // daily quota, down, or has a bad key.  Pure logic: providers are injected (easy to test).
-import { ApiError } from "./errors.js";
-import { pickGroqModels, pickGeminiModels } from "../providers/models.js";
+import { ApiError, label } from "./errors.js";
+import { pickGroqModels, pickGeminiModels, pickOpenAiModels } from "../providers/models.js";
 
 const defaultSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export class Router {
   /**
    * @param {{groq?:object, gemini?:object}} providers   keyed providers (absent = no key)
-   * @param {{preferGemini?:boolean, models?:object}} opts
+   * @param {{preferGemini?:boolean, engines?:object, models?:object}} opts
    */
   constructor(providers, { preferGemini = false, engines = {}, overrides = {}, now = Date.now, sleep = defaultSleep, onNotice = () => {}, usage = null } = {}) {
     this.providers = providers;
     this.usage = usage; // optional UsageTracker: lets us pace requests under each model's per-minute limit
     this.preferGemini = preferGemini;
     // which engine to try first, per stage: speech ("stt") and translation ("llm").
-    // stt: auto | groq | groq-turbo | gemini     llm: auto | groq | gemini.   A missing key simply falls through to the other.
+    // stt: auto | groq | groq-turbo | gemini | openai     llm: auto | groq | gemini | openai.   A missing key simply falls through to the other.
     this.engines = { stt: engines.stt || "auto", llm: engines.llm || "auto" };
     this.overrides = overrides; // {stt, llm, gemini}: user-typed model ids (advanced)
     this.now = now;
@@ -24,6 +24,7 @@ export class Router {
     this.models = {
       groq: pickGroqModels(null),
       gemini: pickGeminiModels(null),
+      openai: pickOpenAiModels(null),
     };
     this.cool = new Map(); // item id -> epoch ms until which it is skipped
     this.dead = new Set(); // providers whose key was rejected
@@ -46,9 +47,16 @@ export class Router {
           if (e instanceof ApiError && e.kind === "auth") this.dead.add("gemini");
         })
       );
+    if (this.providers.openai)
+      tasks.push(
+        this.providers.openai.listModels().then((l) => (this.models.openai = pickOpenAiModels(l))).catch((e) => {
+          if (e instanceof ApiError && e.kind === "auth") this.dead.add("openai");
+        })
+      );
     await Promise.all(tasks);
     if (this.overrides.stt) this.models.groq.stt = [this.overrides.stt, ...this.models.groq.stt.filter((m) => m !== this.overrides.stt)];
     if (this.overrides.llm) this.models.groq.llm = [this.overrides.llm, ...this.models.groq.llm.filter((m) => m !== this.overrides.llm)];
+    if (this.overrides.openai) this.models.openai.llm = [this.overrides.openai, ...this.models.openai.llm.filter((m) => m !== this.overrides.openai)];
     if (this.overrides.gemini) {
       for (const k of ["stt", "llm"]) this.models.gemini[k] = [this.overrides.gemini, ...this.models.gemini[k].filter((m) => m !== this.overrides.gemini)];
     }
@@ -68,8 +76,9 @@ export class Router {
 
   chain(kind) {
     const pref = this.engines[kind] || "auto";
-    const geminiFirst = pref === "gemini" || (pref === "auto" && this.preferGemini);
-    const order = geminiFirst ? ["gemini", "groq"] : ["groq", "gemini"];
+    // the chosen service goes first, then the others as fallbacks (OpenAI last: it costs money, so it is only a fallback unless chosen)
+    const first = pref === "gemini" || pref === "openai" ? pref : pref === "auto" && this.preferGemini ? "gemini" : "groq";
+    const order = [first, ...["groq", "gemini", "openai"].filter((p) => p !== first)];
     const items = [];
     for (const p of order) {
       if (!this.providers[p] || this.dead.has(p)) continue;
@@ -123,14 +132,14 @@ export class Router {
             throw e;
           case "auth":
             this.dead.add(item.provider);
-            this.notice(`auth-${item.provider}`, "error", `${item.provider === "groq" ? "Groq" : "Gemini"} key was rejected. Check it in Settings.`);
+            this.notice(`auth-${item.provider}`, "error", `${label(item.provider)} key was rejected. Check it in Settings.`);
             continue;
           case "model":
             this.bad.add(item.id);
             continue;
           case "quota":
             this.cool.set(item.id, t + Math.max(e.retryAfterMs, 30 * 60000));
-            this.notice(`quota-${item.id}`, "warn", `Daily limit reached on ${item.model} — switching.`);
+            this.notice(`quota-${item.id}`, "warn", item.provider === "openai" ? "OpenAI credit has run out — switching to the other services." : `Daily limit reached on ${item.model} — switching.`);
             continue;
           case "rate":
             this.cool.set(item.id, t + Math.min(Math.max(e.retryAfterMs, 1500), 120000));

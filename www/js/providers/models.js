@@ -28,6 +28,22 @@ export function pickGroqModels(available) {
   };
 }
 
+export const OPENAI_STT_PREFERENCE = ["gpt-4o-transcribe", "whisper-1", "gpt-4o-mini-transcribe"];
+// strong, fast, non-"thinking" models first: a live lecture cannot wait several seconds for a model to reason
+export const OPENAI_LLM_PREFERENCE = ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"];
+const OPENAI_NOT_CHAT = /transcribe|whisper|tts|audio|realtime|image|search|embed|moderation|instruct|codex|preview|dall|sora/i;
+
+export function pickOpenAiModels(available) {
+  const have = new Set(available || []);
+  const stt = OPENAI_STT_PREFERENCE.filter((m) => !available || have.has(m));
+  const llm = OPENAI_LLM_PREFERENCE.filter((m) => !available || have.has(m)).slice(0, 3);
+  if (available && !llm.length) llm.push(...available.filter((m) => /^gpt-/.test(m) && !OPENAI_NOT_CHAT.test(m)).slice(0, 2));
+  return {
+    stt: stt.length ? stt : OPENAI_STT_PREFERENCE.slice(0, 2),
+    llm: llm.length ? llm : OPENAI_LLM_PREFERENCE.slice(0, 2),
+  };
+}
+
 /** gemini-2.5-flash, gemini-3-flash, … (stable aliases only; newest first, flash before flash-lite). */
 export function pickGeminiModels(available) {
   const fallback = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];

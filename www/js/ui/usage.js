@@ -2,7 +2,7 @@
 import { h, fmtDuration } from "../util.js";
 import { icon } from "./icons.js";
 import { openSheet } from "./overlay.js";
-import { PROVIDER_LABEL, providerOf, roleOf, prettyModel } from "../engine/limits.js";
+import { PROVIDER_LABEL, providerOf, roleOf, prettyModel, openaiCost } from "../engine/limits.js";
 
 export const OFFICIAL = [
   { label: "Groq usage", url: "https://console.groq.com/dashboard/usage" },
@@ -26,6 +26,10 @@ export function idsToShow(app) {
     ids.add("groq:openai/gpt-oss-120b");
   }
   if (s.geminiKey.trim()) ids.add("gemini:" + (s.modelGemini.trim() || "gemini-2.5-flash"));
+  if (s.openaiKey.trim()) {
+    ids.add("openai:gpt-4o-transcribe");
+    ids.add("openai:" + (s.modelOpenai.trim() || "gpt-4.1"));
+  }
   return [...ids].sort((a, b) => providerOf(a).localeCompare(providerOf(b)) || (roleOf(a) === "Speech" ? -1 : 1) - (roleOf(b) === "Speech" ? -1 : 1) || a.localeCompare(b));
 }
 
@@ -50,7 +54,7 @@ export function usagePanel(app) {
     for (const id of ids) {
       const prov = providerOf(id);
       if (prov !== lastProvider) {
-        root.append(h("div", { class: "u-prov" }, PROVIDER_LABEL[prov] || prov, h("small", {}, prov === "gemini" ? "resets at midnight Pacific time" : "counted over the last 24 hours")));
+        root.append(h("div", { class: "u-prov" }, PROVIDER_LABEL[prov] || prov, h("small", {}, prov === "gemini" ? "resets at midnight Pacific time" : prov === "openai" ? "pay-as-you-go · rough cost estimates" : "counted over the last 24 hours")));
         lastProvider = prov;
       }
       const role = roleOf(id);
@@ -60,6 +64,11 @@ export function usagePanel(app) {
       if (left != null) {
         const what = role === "Speech" ? "free speech limit" : "free daily tokens of this model";
         card.append(h("div", { class: "u-est" }, left > 0 ? `At this pace the ${what} ${role === "Speech" ? "is" : "are"} used up in about ${fmtDuration(left * 60)} of lecture.` : `The ${what} for now ${role === "Speech" ? "has" : "have"} been used up.`));
+      }
+      if (prov === "openai") {
+        const day = app.usage.dayStart(id);
+        const cost = openaiCost(id, { audioSec: app.usage.sumSince(id, 1, day), tokens: app.usage.sumSince(id, 2, day) });
+        if (cost > 0) card.append(h("div", { class: "u-est" }, `About $${cost < 0.1 ? cost.toFixed(3) : cost.toFixed(2)} in the last 24 hours (an estimate from this phone's counts; your OpenAI billing page is exact).`));
       }
       root.append(card);
     }

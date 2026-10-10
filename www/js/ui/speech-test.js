@@ -5,7 +5,7 @@ import { icon } from "./icons.js";
 import { MicCapture } from "../audio/capture.js";
 import { Chunker } from "../audio/chunker.js";
 import { encodeWav } from "../audio/wav.js";
-import { compareEngines } from "../engine/compare.js";
+import { compareEngines, compareTranslators } from "../engine/compare.js";
 
 const SECONDS = 8;
 
@@ -27,6 +27,8 @@ export function speechTest(app) {
   const status = h("div", { class: "status-line", style: "margin-top:8px" });
   const player = h("audio", { controls: true, class: "st-audio", hidden: true });
   const results = h("div", { class: "st-results" });
+  const trHead = h("div", { class: "st-sub", hidden: true }, "Translation of the first transcript, by each translator");
+  const trResults = h("div", { class: "st-results" });
   let busy = false;
   let url = null;
 
@@ -49,13 +51,22 @@ export function speechTest(app) {
     el.replaceChildren(head, ...body);
   }
 
+  function drawTr(row) {
+    let el = trResults.querySelector(`[data-key="${row.key}"]`);
+    if (!el) { el = h("div", { class: "st-row", "data-key": row.key }); trResults.append(el); }
+    const head = h("div", { class: "st-head" }, h("b", {}, row.label), h("span", { class: "st-ms" }, row.state === "waiting" ? "waiting…" : row.state === "translating" ? "translating…" : `${(row.ms / 1000).toFixed(1)} s`));
+    el.replaceChildren(head, row.error ? h("div", { class: "st-err" }, row.error) : row.en ? h("div", { class: "st-en" }, row.en) : null);
+  }
+
   btn.onclick = async () => {
     if (busy) return;
     if (app.active) { say("bad", "Stop the current recording first."); return; }
-    if (!app.settings.groqKey.trim() && !app.settings.geminiKey.trim()) { say("bad", "Add a Groq or Gemini key above first."); return; }
+    if (!app.hasKey()) { say("bad", "Add a key above first."); return; }
     busy = true;
     btn.disabled = true;
     results.replaceChildren();
+    trResults.replaceChildren();
+    trHead.hidden = true;
     player.hidden = true;
     if (url) { URL.revokeObjectURL(url); url = null; }
 
@@ -97,6 +108,11 @@ export function speechTest(app) {
       await router.init();
       const rows = await compareEngines({ router, wav, seconds: total / 16000, settings: app.settings, usage: app.usage, onRow: drawRow });
       if (!rows.length) say("bad", "No speech engine available. Check your keys.");
+      const first = rows.find((r) => r.text);
+      if (first) {
+        trHead.hidden = false;
+        await compareTranslators({ router, text: first.text, settings: app.settings, usage: app.usage, onRow: drawTr });
+      }
     } catch (e) {
       say("bad", e.message || "The test failed.");
     }
@@ -106,5 +122,5 @@ export function speechTest(app) {
 
   return h("div", { class: "field" },
     h("div", {}, btn),
-    meter, status, player, results);
+    meter, status, player, results, trHead, trResults);
 }

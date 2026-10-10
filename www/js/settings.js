@@ -3,9 +3,10 @@
 export const DEFAULT_SETTINGS = {
   groqKey: "",
   geminiKey: "",
+  openaiKey: "", // pay-as-you-go; optional
   preferGemini: false, // legacy: kept so older saved settings still work
-  sttEngine: "auto", // auto | groq | groq-turbo | gemini   (speech recognition)
-  llmEngine: "auto", // auto | groq | gemini            (translation)
+  sttEngine: "auto", // auto | groq | groq-turbo | gemini | openai   (speech recognition)
+  llmEngine: "auto", // auto | groq | gemini | openai            (translation)
   context: "", // "Shaykh X — Seerah series. Names: …"
   delay: "balanced", // quick | balanced | smooth
   termStyle: "keep", // keep | english
@@ -29,6 +30,7 @@ export const DEFAULT_SETTINGS = {
   modelStt: "", // advanced overrides
   modelLlm: "",
   modelGemini: "",
+  modelOpenai: "", // translation model override for OpenAI (e.g. gpt-5-mini)
 };
 
 /** How "smooth vs quick" maps onto chunking + how long we wait for the following sentence. */

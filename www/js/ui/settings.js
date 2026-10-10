@@ -2,7 +2,7 @@
 import { h } from "../util.js";
 import { icon } from "./icons.js";
 import { backButton, toggleRow, segmented } from "./common.js";
-import { testKey, GROQ_KEYS_URL, GEMINI_KEYS_URL } from "./setup.js";
+import { testKey, GROQ_KEYS_URL, GEMINI_KEYS_URL, OPENAI_KEYS_URL } from "./setup.js";
 import { DELAY_PRESETS } from "../settings.js";
 import { builtinGlossary } from "../engine/glossary.js";
 import { MicCapture } from "../audio/capture.js";
@@ -89,11 +89,11 @@ function enginePicker(app, { label, field, options, notes }) {
   const note = h("div", { class: "seg-note" });
   const show = (v) => {
     const s = app.settings;
-    const need = v === "gemini" && !s.geminiKey.trim() ? " Add a Gemini key above to use it." : v !== "gemini" && v !== "auto" && !s.groqKey.trim() ? " Add a Groq key above to use it." : "";
+    const need = v === "gemini" && !s.geminiKey.trim() ? " Add a Gemini key above to use it." : v === "openai" && !s.openaiKey.trim() ? " Add an OpenAI key above to use it." : v !== "gemini" && v !== "openai" && v !== "auto" && !s.groqKey.trim() ? " Add a Groq key above to use it." : "";
     note.textContent = (notes[v] || "") + need;
   };
   show(app.settings[field]);
-  app.on("settings", (p) => ("geminiKey" in p || "groqKey" in p) && show(app.settings[field]));
+  app.on("settings", (p) => ("geminiKey" in p || "groqKey" in p || "openaiKey" in p) && show(app.settings[field]));
   return h("div", { class: "field" }, h("label", {}, label),
     segmented(options, app.settings[field], (v) => { app.update({ [field]: v }); show(v); }),
     note);
@@ -132,28 +132,31 @@ export function buildSettings(app, screen) {
       h("div", { class: "page" },
         h("section", { class: "card" },
           h("h3", {}, icon("key"), "Connection"),
-          h("p", { class: "hint" }, "Free keys, stored only on this phone. One is enough; a second one acts as a backup if the first runs out for the day."),
+          h("p", { class: "hint" }, "Keys are stored only on this phone. One is enough. Groq and Gemini are free; a second key acts as a backup if the first runs out for the day. OpenAI is optional and paid."),
           keyField(app, { provider: "groq", label: "Groq key — speech recognition + translation", field: "groqKey", placeholder: "gsk_…", link: GROQ_KEYS_URL, linkText: "Get a free key →", hint: "Recommended. Runs Whisper large-v3." }),
           keyField(app, { provider: "gemini", label: "Google Gemini key — optional backup", field: "geminiKey", placeholder: "AIza…", link: GEMINI_KEYS_URL, linkText: "Get a free key →", hint: "Takes over automatically if Groq's free allowance is used up." }),
+          keyField(app, { provider: "openai", label: "OpenAI key — optional, pay-as-you-go", field: "openaiKey", placeholder: "sk-…", link: OPENAI_KEYS_URL, linkText: "Get a key →", hint: "No free tier: you add a few dollars of credit and pay for what you use (roughly $0.3–1.5 per lecture hour). Choose it below, or it steps in when the free services run out." }),
           enginePicker(app, {
             label: "Speech recognition (hearing the Arabic)",
             field: "sttEngine",
-            options: [["auto", "Auto"], ["groq", "Whisper"], ["groq-turbo", "Turbo"], ["gemini", "Gemini"]],
+            options: [["auto", "Auto"], ["groq", "Whisper"], ["groq-turbo", "Turbo"], ["gemini", "Gemini"], ["openai", "OpenAI"]],
             notes: {
               auto: "Whisper large-v3 first (the most accurate), then Turbo, then Gemini if the free allowance runs out.",
               groq: "Whisper large-v3 on Groq, then the others if it runs out.",
               "groq-turbo": "Whisper large-v3 turbo first: about twice as fast and a bit less accurate on difficult Arabic. Falls back to the others if its allowance runs out.",
               gemini: "Google's model listens to the audio directly. Needs the Gemini key.",
+              openai: "OpenAI's gpt-4o-transcribe, then Whisper-1. Paid per minute of audio. Needs the OpenAI key.",
             },
           }),
           enginePicker(app, {
             label: "Translation (Arabic → English)",
             field: "llmEngine",
-            options: [["auto", "Auto"], ["groq", "Groq"], ["gemini", "Gemini"]],
+            options: [["auto", "Auto"], ["groq", "Groq"], ["gemini", "Gemini"], ["openai", "OpenAI"]],
             notes: {
               auto: "Groq's open models first, then Gemini if the free allowance runs out.",
               groq: "Groq's open models first (gpt-oss-120b…), then Gemini if they run out.",
               gemini: "Gemini first, then Groq if it runs out. Needs the Gemini key.",
+              openai: "OpenAI first (gpt-4.1 by default), then the free services if your credit runs out. Needs the OpenAI key.",
             },
           })),
 
@@ -227,7 +230,8 @@ export function buildSettings(app, screen) {
             h("summary", {}, "Advanced"),
             adv("Speech model override (Groq)", "modelStt", "whisper-large-v3"),
             adv("Translation model override (Groq)", "modelLlm", "openai/gpt-oss-120b"),
-            adv("Gemini model override", "modelGemini", "gemini-2.5-flash"))),
+            adv("Gemini model override", "modelGemini", "gemini-2.5-flash"),
+            adv("OpenAI translation model override", "modelOpenai", "gpt-4.1  (try gpt-4.1-mini to spend less)"))),
 
         h("div", { class: "about" },
           h("img", { src: "assets/logo-mark.png", alt: "" }),

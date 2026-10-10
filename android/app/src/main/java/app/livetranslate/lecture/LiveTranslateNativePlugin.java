@@ -47,7 +47,7 @@ import java.util.Map;
 )
 public class LiveTranslateNativePlugin extends Plugin {
 
-    private static final String[] ALLOWED_HOSTS = {"api.groq.com", "generativelanguage.googleapis.com"};
+    private static final String[] ALLOWED_HOSTS = {"api.groq.com", "generativelanguage.googleapis.com", "api.openai.com"};
 
     @PluginMethod
     public void keepAwake(PluginCall call) {
