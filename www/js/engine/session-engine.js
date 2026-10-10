@@ -70,6 +70,10 @@ export class LectureEngine extends Emitter {
   ingestChunk(chunk) {
     if (this.stopped) return;
     const e = { id: uid("e"), seq: ++this.seq, t0: chunk.startMs / 1000, t1: chunk.endMs / 1000, kind: "lecture", ar: "", en: "", state: "transcribing", attempts: 0 };
+    if (this.breakNext) {
+      e.breakBefore = true; // recording was paused: start a fresh paragraph
+      this.breakNext = false;
+    }
     this.entries.push(e);
     this.audio.set(e.id, encodeWav(chunk.pcm));
     this.emit("entry", e);
@@ -246,6 +250,10 @@ export class LectureEngine extends Emitter {
     }
   }
 
+  markBreak() {
+    this.breakNext = true;
+  }
+
   // ---- control -------------------------------------------------------------------------------
   retry(id) {
     const e = this.entries.find((x) => x.id === id);
@@ -311,6 +319,6 @@ export class LectureEngine extends Emitter {
   snapshot() {
     return this.entries
       .filter((e) => e.state === "done" || (e.kind === "lecture" && e.ar))
-      .map(({ id, seq, t0, t1, kind, ar, en, state }) => ({ id, seq, t0, t1, kind, ar, en, state: state === "done" ? "done" : "partial" }));
+      .map(({ id, seq, t0, t1, kind, ar, en, state, breakBefore }) => ({ id, seq, t0, t1, kind, ar, en, state: state === "done" ? "done" : "partial", ...(breakBefore ? { breakBefore } : {}) }));
   }
 }

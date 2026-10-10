@@ -9,7 +9,7 @@ export const DEFAULT_SETTINGS = {
   termStyle: "keep", // keep | english
   honorifics: "short", // short | full
   lectureLang: "auto", // auto (Arabic + English interpreter) | ar (Arabic only)
-  showArabic: true,
+  showArabic: false,
   textSize: 1,
   theme: "dark", // dark | light
   noiseSuppression: true,
