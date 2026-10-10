@@ -124,3 +124,21 @@ test("the estimate uses the pace while recording, not an average diluted by idle
   for (let i = 0; i < 8; i++) u.record(W, { audio: 10 }); // a 20-second burst: 80 s billed within one minute
   assert.equal(u.minutesLeft(W), Math.floor((7200 - 80) / 80)); // 89
 });
+
+test("translation models: how long the daily tokens last at the current pace", () => {
+  const { u, clock } = mk();
+  for (let i = 0; i < 5; i++) { u.record(L, { tokens: 10000 }); clock.t += 60000; } // 10k tokens per minute for 5 minutes
+  assert.equal(u.minutesLeft(L), Math.floor((200000 - 50000) / 10000)); // 15
+});
+
+test("paid plans: no free-tier limits, bars, estimates or pacing", () => {
+  const { u } = mk();
+  u.paid = { groq: true };
+  for (let i = 0; i < 40; i++) { u.touch(W); u.record(W, { audio: 10 }); }
+  assert.equal(u.pace(W), 0);
+  assert.ok(u.rows(W).every((r) => r.frac === null && r.limit === null));
+  assert.equal(u.headline([W]), null);
+  assert.equal(u.minutesLeft(W), null);
+  u.paid = {};
+  assert.ok(u.rows(W).some((r) => r.limit));
+});

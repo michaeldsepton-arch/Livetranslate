@@ -87,6 +87,26 @@ Free allowances are set by Groq/Google and change from time to time. At the time
 speech-to-text per hour and ~8 hours per day, plus a daily token budget for the translator per model. A typical 1-hour lecture fits;
 back-to-back all-day sessions may switch to the backup key, or wait for the daily reset. The app tells you when a limit is hit.
 
+## How much can I record? Free vs pay-as-you-go
+
+The free allowance is set by Groq/Google, and **translation (the language model) runs out first, not speech recognition**: each translated
+sentence costs roughly 1,100 tokens (the instructions are most of it), and Groq's free tier allows about 200,000 tokens a day per model.
+Typical numbers for **continuous speech** (estimates — your own figures appear in *Settings → Free allowance*):
+
+| Setting | Free Groq lecture time per day* | Pay-as-you-go cost per lecture hour** |
+|---|---|---|
+| Instant (~3–4 s behind) | ~15 min | ~$0.55–0.90 |
+| Quick (~6 s) | ~30 min | ~$0.25–0.40 |
+| **Balanced (~10 s, default)** | **~40 min** | **~$0.20–0.30** |
+| Smooth (~15 s) | ~45 min | ~$0.15–0.25 |
+
+\* assumes two free translation models at 200k tokens/day each; if Groq lists more free models the app uses those too, and a free
+**Gemini key** adds a backup pool (its free limits are not published precisely — the app just shows usage).
+\** Groq's published pay-as-you-go prices (Whisper large-v3 $0.111 or large-v3-turbo $0.04 per audio hour, billed at least 10 s per clip;
+gpt-oss-120b $0.15 / $0.60 per million input / output tokens) applied to those token counts. There is **no subscription**: you add a card
+to your Groq account and pay for what you use — roughly 20–30 cents per lecture hour. Turn on *"My Groq account is on a paid plan"*
+in Settings so the app stops treating you as free-tier.
+
 ## Honest limitations
 
 * **Needs internet** during the lecture (mobile data is fine: ~2 MB per minute of speech).

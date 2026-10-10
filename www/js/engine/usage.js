@@ -24,6 +24,7 @@ export class UsageTracker {
     this.byId = {}; // id -> { minuteEpoch: [requests, audioSeconds, tokens] }
     this.reported = {}; // id -> numbers the service itself reported (response headers)
     this.recent = {}; // id -> timestamps of requests in the last minute (for pacing)
+    this.paid = {}; // provider -> true when the account is on a paid plan (free-tier limits do not apply)
     this.listeners = new Set();
     this._timer = null;
     this._load();
@@ -98,6 +99,11 @@ export class UsageTracker {
     return n;
   }
 
+  /** Free-tier limits for a model, or none when that account is on a paid plan. */
+  limits(id) {
+    return this.paid[providerOf(id)] ? {} : limitsFor(id);
+  }
+
   /** Start of this model's "today" window: rolling 24 h for Groq, calendar day (Pacific) for Gemini. */
   dayStart(id) {
     return providerOf(id) === "gemini" ? startOfDayInTz(this.now(), "America/Los_Angeles") : this.now() - DAY;
@@ -105,7 +111,7 @@ export class UsageTracker {
 
   /** ms until another request to `id` stays politely under its per-minute limit (0 = go now). */
   pace(id) {
-    const rpm = limitsFor(id).rpm;
+    const rpm = this.limits(id).rpm;
     if (!rpm) return 0;
     const cap = Math.max(1, Math.floor(rpm * 0.9));
     const t = this.now();
@@ -124,7 +130,7 @@ export class UsageTracker {
   /** Rows for the usage screen: each {key,label,used,limit,unit,frac|null,reported}. */
   rows(id) {
     const t = this.now();
-    const L = limitsFor(id);
+    const L = this.limits(id);
     const day = this.dayStart(id);
     const rep = this.reported[id];
     const out = [];
@@ -154,22 +160,33 @@ export class UsageTracker {
   }
 
   /**
-   * Minutes of lecture until this speech model's free limit (the hourly or the daily one, whichever comes first),
-   * at the pace of the last 10 minutes.  null when there is no recent activity or no known limit.
+   * Minutes of lecture until this model's free limit, at the pace of the last 10 minutes *while recording*:
+   * speech models -> the hourly or daily audio limit (whichever comes first); translation models -> the daily token limit.
+   * null when there is no recent activity or no known limit.
    */
   minutesLeft(id) {
-    const L = limitsFor(id);
-    if (!L.asd || !L.ash) return null;
+    const L = this.limits(id);
     const t = this.now();
-    // pace = audio per minute *while recording* (minutes with activity in the last 10), not diluted by idle time
     const b = this.byId[id] || {};
     const first = Math.floor((t - 10 * MIN) / MIN);
-    const active = Object.keys(b).filter((m) => +m >= first && b[m][1] > 0).length;
-    const perMin = active ? this.sumSince(id, 1, t - 10 * MIN) / active : 0;
-    if (perMin <= 0) return null;
-    const leftHour = L.ash - this.sumSince(id, 1, t - HOUR);
-    const leftDay = L.asd - this.sumSince(id, 1, this.dayStart(id));
-    return Math.max(0, Math.floor(Math.min(leftHour, leftDay) / perMin));
+    const activeMinutes = (field) => Object.keys(b).filter((m) => +m >= first && b[m][field] > 0).length;
+    const paceOf = (field) => {
+      const active = activeMinutes(field);
+      return active ? this.sumSince(id, field, t - 10 * MIN) / active : 0;
+    };
+    if (L.asd && L.ash) {
+      const perMin = paceOf(1);
+      if (perMin <= 0) return null;
+      const leftHour = L.ash - this.sumSince(id, 1, t - HOUR);
+      const leftDay = L.asd - this.sumSince(id, 1, this.dayStart(id));
+      return Math.max(0, Math.floor(Math.min(leftHour, leftDay) / perMin));
+    }
+    if (L.tpd) {
+      const perMin = paceOf(2);
+      if (perMin <= 0) return null;
+      return Math.max(0, Math.floor((L.tpd - this.sumSince(id, 2, this.dayStart(id))) / perMin));
+    }
+    return null;
   }
 
   clear() {

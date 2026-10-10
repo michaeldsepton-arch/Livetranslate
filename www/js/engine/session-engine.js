@@ -266,9 +266,9 @@ export class LectureEngine extends Emitter {
           .slice(-5)
           .map((x) => (x.kind === "interpreter" ? `(Interpreter: ${x.en})` : x.en))
           .join(" "),
-        70
+        55
       );
-      const glossary = this.glossary.find([prevLecture?.ar, e.ar, nextAr].filter(Boolean).join(" "), 14);
+      const glossary = this.glossary.find([prevLecture?.ar, e.ar, nextAr].filter(Boolean).join(" "), 10);
       const user = buildUserPrompt({ current: e.ar, previous: prevLecture?.ar || "", next: nextAr, recent, glossary, context: this.settings.context || "", quran: e.quran || [] });
       const { value, item } = await this.router.run(
         "llm",

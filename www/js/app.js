@@ -40,6 +40,7 @@ export class App extends Emitter {
     this.isDemo = false;
     this.autoPaused = false;
     this.usage = new UsageTracker();
+    this._syncPlan();
     this._alerted = new Set();
     this.usage.on(() => this._checkAllowance());
     this.autosave = debounce(() => this._persist(), 1500);
@@ -60,9 +61,14 @@ export class App extends Emitter {
     const keysChanged = "groqKey" in patch || "geminiKey" in patch || "preferGemini" in patch || "modelStt" in patch || "modelLlm" in patch || "modelGemini" in patch;
     Object.assign(this.settings, patch);
     saveSettings(this.settings);
+    if ("groqPaid" in patch || "geminiPaid" in patch) this._syncPlan();
     this.applySettings();
     this.emit("settings", patch);
     if (keysChanged && this.engine && this.engine.halted) this.resumeEngine();
+  }
+
+  _syncPlan() {
+    this.usage.paid = { groq: !!this.settings.groqPaid, gemini: !!this.settings.geminiPaid };
   }
 
   hasKey() {

@@ -57,7 +57,10 @@ export function usagePanel(app) {
       const card = h("div", { class: "u-model" }, h("div", { class: "u-name" }, prettyModel(id), role ? h("span", { class: "mini" }, role) : null));
       for (const r of app.usage.rows(id)) card.append(row(r));
       const left = app.usage.minutesLeft(id);
-      if (left != null) card.append(h("div", { class: "u-est" }, left > 0 ? `At this pace the free speech limit is reached in about ${fmtDuration(left * 60)}.` : "The free speech limit for now has been reached."));
+      if (left != null) {
+        const what = role === "Speech" ? "free speech limit" : "free daily tokens of this model";
+        card.append(h("div", { class: "u-est" }, left > 0 ? `At this pace the ${what} ${role === "Speech" ? "is" : "are"} used up in about ${fmtDuration(left * 60)} of lecture.` : `The ${what} for now ${role === "Speech" ? "has" : "have"} been used up.`));
+      }
       root.append(card);
     }
     root.append(h("p", { class: "hint", style: "margin:10px 0 0" }, "These counts cover this phone only, and the limits are typical free-tier values — Groq and Google can change them and may count slightly differently. The official pages below are always right."));

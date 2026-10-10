@@ -10,6 +10,8 @@ export const DEFAULT_SETTINGS = {
   honorifics: "short", // short | full
   dialect: "saudi", // fusha | saudi | other
   backgroundListening: true, // keep listening with the screen off / another app in front
+  groqPaid: false, // account is on a paid plan: the free-tier limits do not apply
+  geminiPaid: false,
   quranMatching: true, // recognise recited Qur'an verses and restore the exact text
   lectureLang: "auto", // auto (Arabic + English interpreter) | ar (Arabic only)
   showArabic: false,

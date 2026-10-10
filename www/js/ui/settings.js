@@ -85,6 +85,8 @@ function micTest(app) {
 
 export function buildSettings(app, screen) {
   const s = app.settings;
+  const usageEl = usagePanel(app);
+  const usageRefresh = () => usageEl.refresh();
   const sens = h("input", { type: "range", min: "-6", max: "12", step: "1", value: String(s.sensitivity), "aria-label": "Microphone sensitivity" });
   const sensLabel = h("span", { class: "label" });
   const showSens = () => (sensLabel.textContent = s.sensitivity === 0 ? "Normal" : s.sensitivity > 0 ? `More sensitive (+${s.sensitivity})` : `Less sensitive (${s.sensitivity})`);
@@ -139,8 +141,10 @@ export function buildSettings(app, screen) {
         h("section", { class: "card" },
           h("h3", {}, icon("battery"), "Free allowance"),
           h("p", { class: "hint" }, "How much of the free Groq / Gemini limits you've used. A chip with the most-used limit also shows while recording; tap it for this screen."),
-          usagePanel(app),
+          usageEl,
           officialLinks(),
+          toggleRow("My Groq account is on a paid plan", "Hides the free-tier limits, warnings and request pacing (paid plans have much higher limits).", s.groqPaid, (v) => { app.update({ groqPaid: v }); usageRefresh(); }),
+          toggleRow("My Gemini account is on a paid plan", "Same, for Gemini.", s.geminiPaid, (v) => { app.update({ geminiPaid: v }); usageRefresh(); }),
           h("div", { style: "margin-top:12px" }, h("button", { class: "btn small", onclick: () => { app.usage.clear(); toast("Counters reset on this phone"); } }, "Reset counters"))),
 
         h("section", { class: "card" },
