@@ -1,5 +1,9 @@
 apply plugin: 'com.android.application'
 
+// CI sets these so every build gets a higher versionCode (lets a new APK install over the old one).
+def ltVersionCode = (System.getenv("LT_VERSION_CODE") ?: "1").toInteger()
+def ltVersionName = System.getenv("LT_VERSION_NAME") ?: "1.0.0"
+
 android {
     namespace "app.livetranslate.lecture"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,8 +11,8 @@ android {
         applicationId "app.livetranslate.lecture"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode ltVersionCode
+        versionName ltVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +20,20 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Sideload signing. The repo ships a throw-away key so that every APK built by CI is signed with the
+    // SAME key (Android only installs an update over an app signed by the same key).  To use your own key,
+    // set the LT_KEYSTORE* environment variables / GitHub secrets described in the README.
+    signingConfigs {
+        sideload {
+            storeFile file(System.getenv("LT_KEYSTORE") ?: "sideload.keystore")
+            storePassword System.getenv("LT_KEYSTORE_PASSWORD") ?: "livetranslate"
+            keyAlias System.getenv("LT_KEY_ALIAS") ?: "livetranslate"
+            keyPassword System.getenv("LT_KEY_PASSWORD") ?: "livetranslate"
+        }
+    }
     buildTypes {
         release {
+            signingConfig signingConfigs.sideload
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

@@ -1,0 +1,122 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to publish the downloadable "latest build" release
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  apk:
+    name: Build APK
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Accept Android SDK licences
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Sync web app into the Android project
+        run: npx cap sync android
+
+      - name: Build release APK
+        working-directory: android
+        env:
+          LT_VERSION_CODE: ${{ github.run_number }}
+          LT_VERSION_NAME: 1.0.${{ github.run_number }}
+          # Optional: your own signing key (see README). Without these the bundled sideload key is used.
+          LT_KEYSTORE_B64: ${{ secrets.LT_KEYSTORE_B64 }}
+          LT_KEYSTORE_PASSWORD: ${{ secrets.LT_KEYSTORE_PASSWORD }}
+          LT_KEY_ALIAS: ${{ secrets.LT_KEY_ALIAS }}
+          LT_KEY_PASSWORD: ${{ secrets.LT_KEY_PASSWORD }}
+        run: |
+          if [ -n "$LT_KEYSTORE_B64" ]; then
+            echo "$LT_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            export LT_KEYSTORE="$RUNNER_TEMP/release.keystore"
+          else
+            unset LT_KEYSTORE_PASSWORD LT_KEY_ALIAS LT_KEY_PASSWORD
+          fi
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace assembleRelease
+
+      - name: Check the APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk dist/LiveTranslate.apk
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs dist/LiveTranslate.apk | head -5
+          "$BT/aapt" dump badging dist/LiveTranslate.apk | grep -E "^package|uses-permission|sdkVersion" || true
+          ls -lh dist/LiveTranslate.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LiveTranslate-apk
+          path: dist/LiveTranslate.apk
+          if-no-files-found: error
+
+      # ---- publish so the APK can be downloaded straight from the phone ----------------------------
+      - name: Move the rolling "latest-build" tag to this commit
+        if: github.event_name == 'push' && github.ref_type == 'branch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f latest-build "$GITHUB_SHA"
+          git push -f origin refs/tags/latest-build
+
+      - name: Publish "latest build" release
+        if: github.event_name == 'push' && github.ref_type == 'branch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-build
+          name: Live Translate — latest build
+          prerelease: true
+          make_latest: false
+          files: dist/LiveTranslate.apk
+          body: |
+            **Install on Android:** download `LiveTranslate.apk` below on your phone, open it, and allow "Install unknown apps" when asked.
+
+            Built from branch `${{ github.ref_name }}` · commit `${{ github.sha }}` · run #${{ github.run_number }}.
+            Updates install over the previous version and keep your keys and saved lectures.
+
+      - name: Publish versioned release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/LiveTranslate.apk
+          generate_release_notes: true
