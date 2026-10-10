@@ -15,4 +15,4 @@ createServer(async (req, res) => {
   } catch {
     res.writeHead(404).end("not found");
   }
-}).listen(port, () => console.log(`Live Translate on http://localhost:${port}`));
+}).listen(port, () => console.log(`Lisan on http://localhost:${port}`));

@@ -40,7 +40,7 @@ const clean = (s) => (s || "").replace(/\s+/g, " ").trim();
  */
 export function buildTxt(session, { includeArabic = true, timestamps = true } = {}) {
   const lines = [];
-  lines.push("LIVE TRANSLATE — LECTURE TRANSCRIPT");
+  lines.push("LISAN — LECTURE TRANSCRIPT");
   lines.push("=".repeat(44));
   lines.push(`Title:    ${session.title}`);
   lines.push(`Date:     ${fmtDate(session.startedAt)}`);

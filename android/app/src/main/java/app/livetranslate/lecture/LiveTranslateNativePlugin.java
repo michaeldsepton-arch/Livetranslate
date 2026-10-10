@@ -28,7 +28,7 @@ import java.util.Map;
 /**
  * Small native helpers the web layer cannot do itself:
  *  - keepAwake:    keep the screen on while a lecture is being recorded
- *  - saveTextFile: write a transcript to Downloads/LiveTranslate (no storage permission needed, Android 10+)
+ *  - saveTextFile: write a transcript to Downloads/Lisan (no storage permission needed, Android 10+)
  *  - http:         fallback HTTPS client used only if the WebView blocks a request to the speech/translation APIs
  */
 @CapacitorPlugin(name = "LiveTranslateNative")
@@ -67,7 +67,7 @@ public class LiveTranslateNativePlugin extends Plugin {
             ContentValues values = new ContentValues();
             values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename);
             values.put(MediaStore.MediaColumns.MIME_TYPE, mime);
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/LiveTranslate");
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Lisan");
             Uri uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
             if (uri == null) {
                 call.reject("could not create the file");
@@ -82,7 +82,7 @@ public class LiveTranslateNativePlugin extends Plugin {
             }
             JSObject res = new JSObject();
             res.put("uri", uri.toString());
-            res.put("path", "Downloads/LiveTranslate/" + filename);
+            res.put("path", "Downloads/Lisan/" + filename);
             call.resolve(res);
         } catch (Exception e) {
             call.reject("save failed: " + e.getMessage());

@@ -44,7 +44,7 @@ export function openKeySetup(app, { thenStart = true } = {}) {
     };
     return [
       h("h3", {}, "Connect a free speech engine"),
-      h("p", {}, "Live Translate uses Groq's free Whisper speech recognition. It takes about a minute and needs no payment card."),
+      h("p", {}, "Lisan uses Groq's free Whisper speech recognition. It takes about a minute and needs no payment card."),
       h("ol", { class: "steps" },
         h("li", {}, h("b", {}, "Open the Groq Console"), " and sign in with Google or email.", h("div", { style: "margin-top:8px" }, h("a", { class: "btn small", href: GROQ_KEYS_URL, target: "_blank", rel: "noopener" }, icon("key"), "Open Groq Console"))),
         h("li", {}, h("b", {}, "Create API key"), " — give it any name, then copy the key."),

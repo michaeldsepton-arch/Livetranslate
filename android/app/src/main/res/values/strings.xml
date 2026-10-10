@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Live Translate</string>
-    <string name="title_activity_main">Live Translate</string>
+    <string name="app_name">Lisan</string>
+    <string name="title_activity_main">Lisan</string>
     <string name="package_name">app.livetranslate.lecture</string>
     <string name="custom_url_scheme">app.livetranslate.lecture</string>
 </resources>

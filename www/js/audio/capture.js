@@ -20,7 +20,7 @@ export class MicCapture {
       });
     } catch (e) {
       const denied = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
-      throw new Error(denied ? "Microphone permission was denied. Allow it in your phone's settings for Live Translate." : `Could not open the microphone (${e && e.name ? e.name : e}).`);
+      throw new Error(denied ? "Microphone permission was denied. Allow it in your phone's settings for Lisan." : `Could not open the microphone (${e && e.name ? e.name : e}).`);
     }
     const Ctx = window.AudioContext || window.webkitAudioContext;
     this.ctx = new Ctx({ latencyHint: "interactive" });

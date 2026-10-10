@@ -1,4 +1,4 @@
-/* Live Translate — design system.  Palette sampled from the app logo:
+/* Lisan — design system.  Palette sampled from the app logo:
    deep navy teal, warm gold, soft cream.  Dark by default, with a cream "paper" light theme. */
 
 @font-face { font-family: "Inter"; font-weight: 400; font-display: swap; src: url("../fonts/inter-latin-400-normal.woff2") format("woff2"); }
@@ -305,3 +305,8 @@ details.adv { margin-top: 6px; } details.adv summary { cursor: pointer; font-siz
   box-sizing: content-box; background: linear-gradient(145deg, #1e4658, #143b4b); border-radius: 14px; padding: 6px 7px;
 }
 :root[data-theme="light"] .empty .logo { border-radius: 26px; padding: 18px 22px; }
+
+/* name: Lisan · لسان ("tongue / language") */
+.wm-ar { font-family: var(--font-ar); font-weight: 700; color: var(--accent); margin-inline-start: 8px; font-size: 1.22em; letter-spacing: 0; vertical-align: -1px; }
+.wordmark { display: flex; align-items: baseline; justify-content: center; gap: 10px; margin: 2px 0 14px; font-size: 13px; font-weight: 650; letter-spacing: 0.34em; text-transform: uppercase; color: var(--accent); }
+.wordmark .wm-ar { font-size: 24px; letter-spacing: 0; text-transform: none; margin: 0; vertical-align: baseline; }

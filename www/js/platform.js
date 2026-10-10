@@ -68,13 +68,13 @@ function browserDownload(filename, text, mime) {
   }, 2000);
 }
 
-/** Save to the phone's Downloads/LiveTranslate folder.  Resolves {where, path}. */
+/** Save to the phone's Downloads/Lisan folder.  Resolves {where, path}. */
 export async function saveTextFile(filename, text, mime = "text/plain") {
   const native = plugin("LiveTranslateNative");
   if (native) {
     try {
       const r = await native.saveTextFile({ filename, text, mimeType: mime });
-      return { where: "downloads", path: r.path || `Downloads/LiveTranslate/${filename}` };
+      return { where: "downloads", path: r.path || `Downloads/Lisan/${filename}` };
     } catch (e) {
       console.warn("native save failed, falling back to share sheet", e);
       await shareTextFile(filename, text, mime);

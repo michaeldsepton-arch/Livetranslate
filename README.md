@@ -1,6 +1,8 @@
-# Live Translate
+# Lisan · لسان
 
-<img src="assets-src/icon-1024.png" width="96" align="right" alt="Live Translate icon">
+<img src="assets-src/icon-1024.png" width="96" align="right" alt="Lisan icon">
+
+*Lisan* is Arabic for “tongue” and “language”.
 
 **A free Android app that translates an Arabic lecture into smooth, steady English as it happens.**
 Press the microphone, put the phone near the speaker, read along. Everything is saved as a transcript (`.txt`).
@@ -17,17 +19,17 @@ and get confused when an English interpreter starts speaking.
 | **Understands Islamic terms and names** | Whisper large-v3 for the Arabic, primed with a religious-lecture vocabulary. A built-in glossary of **~500** terms, prophets, Companions, scholars, places, books and all 114 surahs is handed to the translator whenever it appears. You can add your own names in *Settings → My names & terms*, and describe the lecture ("Seerah class by Shaykh X") for extra context. |
 | **A continuous script for the whole lecture** | Sentences flow into paragraphs with timestamps; the screen follows the lecture, and you can scroll back without losing your place. |
 | **An English interpreter speaks too** | Every audio chunk is language-detected. English is shown as **Interpreter** text (italic, gold bar) and is never re-translated; Arabic is translated. The interpreter's words are also given to the translator as context for the next Arabic passage. |
-| **Save the transcript as a text file** | When you stop, a `.txt` is written to **Downloads/LiveTranslate** (and kept in the in-app **Library**). Share, copy, rename or re-export any lecture later. |
+| **Save the transcript as a text file** | When you stop, a `.txt` is written to **Downloads/Lisan** (and kept in the in-app **Library**). Share, copy, rename or re-export any lecture later. |
 | **Free** | Uses the free tiers of Groq (Whisper + an open LLM) and, optionally, Google Gemini as a backup. No subscription, no card. |
 | **Nice design from the logo** | Navy / gold / cream palette taken from the logo; Amiri for Arabic, Literata for reading, dark and light themes. |
 
 ## Install the app (about 2 minutes)
 
-1. **Get the APK.** On your phone open the repo's **Releases** page and download `LiveTranslate.apk` from
-   **“Live Translate — latest build”**. (Every push builds it automatically with GitHub Actions; you can also grab it from the
+1. **Get the APK.** On your phone open the repo's **Releases** page and download `Lisan.apk` from
+   **“Lisan — latest build”**. (Every push builds it automatically with GitHub Actions; you can also grab it from the
    *Actions* tab → latest run → *Artifacts*.)
 2. Open the downloaded file. Android will ask to allow **Install unknown apps** for your browser/Files app — allow it once.
-3. Open **Live Translate**. Allow the microphone.
+3. Open **Lisan**. Allow the microphone.
 4. Tap **Set up free key** and follow the 3 steps (see below).
 5. Press the microphone. 🎙️
 

@@ -9,7 +9,7 @@ export function buildLive(app, screen) {
   const header = h(
     "header",
     { class: "bar" },
-    h("div", { class: "brand" }, h("img", { src: "assets/logo-mark.png", alt: "" }), h("div", {}, h("h1", {}, "Live Translate"), h("small", {}, "Arabic lectures → English"))),
+    h("div", { class: "brand" }, h("img", { src: "assets/logo-mark.png", alt: "" }), h("div", {}, h("h1", {}, "Lisan", h("span", { class: "wm-ar", lang: "ar" }, "لسان")), h("small", {}, "Arabic lectures → English"))),
     pill
   );
 
@@ -51,7 +51,8 @@ export function buildLive(app, screen) {
   // ---- empty / welcome ------------------------------------------------------------------------
   function renderEmpty() {
     empty.replaceChildren(
-      h("img", { class: "logo", src: "assets/logo-mark.png", alt: "Live Translate" }),
+      h("img", { class: "logo", src: "assets/logo-mark.png", alt: "Lisan" }),
+      h("div", { class: "wordmark" }, h("span", {}, "Lisan"), h("span", { class: "wm-ar", lang: "ar" }, "لسان")),
       h("h2", {}, "Follow the lecture as it happens"),
       h("p", {}, "Press the microphone and set your phone near the speaker. Arabic is translated into smooth, steady English — a few seconds behind, so it never flip-flops."),
       !app.hasKey()
@@ -88,7 +89,7 @@ export function buildLive(app, screen) {
         h("div", { style: "width:100%" },
           h("div", { class: "card", style: "margin:0" },
             h("h3", {}, icon("check"), app.isDemo ? "Demo finished" : "Lecture saved"),
-            h("p", { class: "hint" }, app.isDemo ? "This is how a real lecture looks. Press the mic to try it for real." : "It's in your Library, and a .txt copy was saved to Downloads/LiveTranslate."),
+            h("p", { class: "hint" }, app.isDemo ? "This is how a real lecture looks. Press the mic to try it for real." : "It's in your Library, and a .txt copy was saved to Downloads/Lisan."),
             h("div", { class: "row-actions" },
               !app.isDemo && app.session ? h("button", { class: "btn small", onclick: () => app.exportShare(app.session) }, icon("share"), "Share") : null,
               !app.isDemo && app.session ? h("button", { class: "btn small", onclick: () => app.exportCopy(app.session) }, icon("copy"), "Copy") : null,

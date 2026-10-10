@@ -158,7 +158,7 @@ export function buildSettings(app, screen) {
 
         h("section", { class: "card" },
           h("h3", {}, icon("download"), "Saving"),
-          toggleRow("Save a .txt file when I stop", "Goes to Downloads/LiveTranslate. The lecture is always kept in the Library too.", s.autoSave, (v) => app.update({ autoSave: v })),
+          toggleRow("Save a .txt file when I stop", "Goes to Downloads/Lisan. The lecture is always kept in the Library too.", s.autoSave, (v) => app.update({ autoSave: v })),
           toggleRow("Include Arabic in the file", "", s.saveArabic, (v) => app.update({ saveArabic: v })),
           toggleRow("Include timestamps", "", s.saveTimestamps, (v) => app.update({ saveTimestamps: v }))),
 
@@ -172,7 +172,8 @@ export function buildSettings(app, screen) {
 
         h("div", { class: "about" },
           h("img", { src: "assets/logo-mark.png", alt: "" }),
-          h("div", {}, `Live Translate ${APP_VERSION}`),
+          h("div", {}, `Lisan ${APP_VERSION}`),
+          h("div", {}, "Lisan (لسان) is Arabic for “tongue” and “language”."),
           h("div", {}, "Open source · speech by Whisper · translation by large language models."),
           h("div", {}, "Machine translation can make mistakes — check verses and hadith against reliable sources."))
       ))
