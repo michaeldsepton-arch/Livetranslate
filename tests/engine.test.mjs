@@ -309,3 +309,79 @@ test("with Qur'an recognition off, text is left exactly as heard", async () => {
   assert.equal(engine.entries[0].quran, undefined);
   assert.ok(engine.entries[0].ar.includes("معنه"));
 });
+
+test("a transliterated 'translation' is retried with a firmer instruction; terms like taqwa and salah stay", async () => {
+  const users = [];
+  const { engine } = setup({
+    stt: sttText([AR1]),
+    chat: ({ user }) => {
+      users.push(user);
+      return users.length === 1 ? "Bismillahi rrahmani rrahim alhamdu lillahi rabbi l alamin wa ssalatu wa ssalamu ala rasulillah" : "In the name of Allah. Praise be to Allah, and keep your taqwa and your salah.";
+    },
+  });
+  engine.ingestChunk(chunk(0));
+  await settled(engine);
+  assert.equal(users.length, 2);
+  assert.ok(users[1].includes("IMPORTANT: your previous answer was a transliteration"));
+  assert.equal(engine.entries[0].en, "In the name of Allah. Praise be to Allah, and keep your taqwa and your salah.");
+});
+
+test("if the translator keeps transliterating, the slice shows a retry button instead of gibberish", async () => {
+  const { engine } = setup({ stt: sttText([AR1]), chat: () => "Bismillahi rrahmani rrahim alhamdu lillahi rabbi l alamin wa ssalatu wa ssalamu ala rasulillah" });
+  engine.ingestChunk(chunk(0));
+  await settled(engine);
+  assert.equal(engine.entries[0].state, "error");
+  assert.equal(engine.entries[0].ar, AR1);
+});
+
+// ---- usage tracking + catch-up ------------------------------------------------------------------------
+import { UsageTracker } from "../www/js/engine/usage.js";
+class Mem { getItem() { return null; } setItem() {} }
+
+test("every request is counted against the model's allowance: billed audio (min 10 s) and tokens", async () => {
+  const usage = new UsageTracker({ storage: new Mem() });
+  const provider = fakeProvider({
+    transcribe: (...a) => ((provider.lastUsage = { audio: 3 }), sttText([AR1])(...a)),
+    chat: () => ((provider.lastUsage = { tokens: 420 }), "Done."),
+  });
+  const router = fakeRouter(provider);
+  const engine = new LectureEngine({ router, settings: { ...DEFAULT_SETTINGS }, usage });
+  engine.cfg = { ...engine.cfg, lookaheadWaitMs: 0 };
+  engine.ingestChunk({ pcm: new Float32Array(1600), startMs: 0, endMs: 3000, voicedMs: 2500 }); // a 3 s clip
+  await settled(engine);
+  const rows = Object.fromEntries(usage.rows("fake:m1").map((r) => [r.key, r]));
+  assert.equal(rows.rpd.used, 2, "one speech request + one translation request");
+  assert.equal(rows.tpd.used, 420);
+  // a Groq model bills at least 10 s per clip
+  const g = new UsageTracker({ storage: new Mem() });
+  const e2 = new LectureEngine({ router: { providers: { groq: provider }, reset() {}, async run(k, fn) { const item = { provider: "groq", model: "whisper-large-v3", id: "groq:whisper-large-v3" }; return { value: await fn(item), item }; } }, settings: { ...DEFAULT_SETTINGS }, usage: g });
+  e2.cfg = { ...e2.cfg, lookaheadWaitMs: 0 };
+  e2.ingestChunk({ pcm: new Float32Array(1600), startMs: 0, endMs: 3000, voicedMs: 2500 });
+  await until(() => g.rows("groq:whisper-large-v3").find((r) => r.key === "asd").used > 0);
+  assert.equal(g.rows("groq:whisper-large-v3").find((r) => r.key === "asd").used, 10);
+});
+
+test("when the translator falls behind, waiting slices are translated together (no ever-growing lag)", async () => {
+  let release;
+  const gate = new Promise((r) => (release = r));
+  const seen = [];
+  const SENTENCES = ["قال الشيخ إن السماء مرفوعة بغير عمد", "وذكر أن الأرض مبسوطة للعباد", "ثم تحدث عن الجبال الراسيات", "وعن البحار والأنهار الجارية", "وأشار إلى الأشجار المثمرة", "وختم بذكر الشمس والقمر"];
+  const { engine, provider } = setup({
+    stt: (_w, _o, call) => ({ text: SENTENCES[call - 1], language: "arabic", segments: [] }),
+    chat: async ({ user }) => {
+      seen.push(user);
+      if (seen.length === 1) await gate; // the first translation is slow (rate limit, bad signal…)
+      return `English ${seen.length}.`;
+    },
+  });
+  for (let i = 0; i < 6; i++) engine.ingestChunk(chunk(i));
+  await until(() => engine.entries.filter((e) => e.state === "awaiting").length >= 4 || provider.calls.chat.length > 0);
+  await wait(60);
+  release();
+  await settled(engine);
+  assert.ok(provider.calls.chat.length <= 4, `used ${provider.calls.chat.length} requests for 6 slices`);
+  assert.ok(engine.entries.length < 6, "merged slices are folded into one entry");
+  assert.ok(engine.entries.every((e) => e.state === "done" && e.en), "everything ends up translated");
+  const merged = engine.entries.find((e) => e.ar.includes("الأرض") && e.ar.includes("الجبال"));
+  assert.ok(merged, "the Arabic of merged slices is kept together");
+});

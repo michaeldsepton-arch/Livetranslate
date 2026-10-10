@@ -15,11 +15,13 @@ ACCURACY
 - Qur'an and hadith: translate the meaning accurately and reverently. Do not invent surah/ayah numbers or narrators that are not spoken.
 - RECOGNISE SCRIPTURE: if CURRENT is a Qur'an verse (even if the transcription is slightly wrong, or only part of a verse), identify it and give the verse's true meaning in clear modern English in line with well-known translations (e.g. Saheeh International) — never a literal rendering of mis-heard words. The same for famous hadith.
 - If a stretch is unintelligible, write [unclear] rather than guessing.
-- If CURRENT is already English, return it unchanged.`;
+- If CURRENT is already English, return it unchanged.
+- Your whole answer must be English. Never answer with an Arabic transliteration of the speech.`;
 
+const NEVER = `NEVER transliterate a sentence, a Qur'an verse, a supplication or a hadith — always give its meaning in English words.`;
 const TERMS = {
-  keep: `TERMS: Keep established Islamic terms and phrases in transliterated form (salah, zakah, taqwa, tawhid, hadith, sunnah, fiqh, InshaAllah, Alhamdulillah, SubhanAllah). Use the GLOSSARY rendering (which includes a short gloss in brackets) only if the term has not already appeared in RECENT; otherwise use the bare term.`,
-  english: `TERMS: Prefer natural English (prayer, fasting, charity, God-consciousness, faith). Keep only terms with no good English equivalent (hadith, fiqh, tawhid, sunnah) and set phrases such as InshaAllah, Alhamdulillah, SubhanAllah in transliterated form.`,
+  keep: `TERMS: Everything is translated into English. Transliteration is ONLY for single Islamic terms and names (salah, zakah, taqwa, tawhid, hadith, sunnah, fiqh, Jannah …) and these short fixed expressions: Alhamdulillah, SubhanAllah, InshaAllah, MashaAllah, Allahu Akbar, Bismillah, Astaghfirullah, Assalamu alaykum. ${NEVER} Use the GLOSSARY rendering (which may include a short gloss in brackets) only if the term has not already appeared in RECENT; otherwise use the bare term.`,
+  english: `TERMS: Prefer natural English (prayer, fasting, charity, God-consciousness, faith). Keep as words only terms with no good English equivalent (hadith, fiqh, tawhid, sunnah) and the short expressions Alhamdulillah, SubhanAllah, InshaAllah, MashaAllah, Allahu Akbar. ${NEVER}`,
 };
 
 const HONORIFICS = {

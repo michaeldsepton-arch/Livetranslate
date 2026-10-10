@@ -56,6 +56,7 @@ export class GeminiProvider {
         j = await send({ ...body, generationConfig: g });
       } else throw e;
     }
+    this.lastUsage = { tokens: j.usageMetadata?.totalTokenCount || 0 };
     const parts = j.candidates?.[0]?.content?.parts || [];
     return parts.map((p) => p.text || "").join("").trim();
   }

@@ -110,3 +110,14 @@ test("dialect hint: Saudi by default, switchable", () => {
   assert.ok(!buildSystemPrompt({ dialect: "fusha" }).includes("Saudi"));
   assert.ok(buildSystemPrompt({ dialect: "other" }).includes("regional dialect"));
 });
+
+test("the terms rule says: single words only, never whole sentences", () => {
+  const sys = buildSystemPrompt();
+  assert.ok(sys.includes("NEVER transliterate a sentence"));
+  assert.ok(sys.includes("single Islamic terms"));
+  assert.ok(buildSystemPrompt({ termStyle: "english" }).includes("NEVER transliterate"));
+  const g = new Glossary();
+  const en = (t) => g.find(t).map((x) => x.en);
+  assert.ok(en("قال حسبنا الله ونعم الوكيل").some((x) => x.startsWith("Allah is sufficient for us")), "supplications are translated, not transliterated");
+  assert.ok(en("لا حول ولا قوة إلا بالله").some((x) => x.startsWith("There is no power")));
+});

@@ -26,11 +26,20 @@ export class GroqProvider {
   async _json(url, opts) {
     const res = await this.http(url, opts);
     if (!res.ok) throw classifyHttp("groq", res.status, res.text, res.headers);
+    this._captureHeaders(res.headers);
     try {
       return JSON.parse(res.text);
     } catch {
       throw new ApiError("Groq returned an unreadable response", { kind: "server", provider: "groq" });
     }
+  }
+
+  /** Groq reports the real daily request allowance in response headers (when the page is allowed to read them). */
+  _captureHeaders(h) {
+    const get = (k) => (h && h.get ? h.get(k) : null);
+    const limit = Number(get("x-ratelimit-limit-requests"));
+    const left = get("x-ratelimit-remaining-requests");
+    this.lastReported = limit > 0 && left != null ? { limitRequests: limit, remainingRequests: Number(left) } : null;
   }
 
   async listModels(signal) {
@@ -48,6 +57,7 @@ export class GroqProvider {
     if (language) fd.append("language", language);
     if (prompt) fd.append("prompt", prompt);
     const j = await this._json(`${BASE}/audio/transcriptions`, { method: "POST", headers: this.headers, body: fd, timeoutMs: 60000, signal });
+    this.lastUsage = { audio: j.duration || 0 };
     return { text: j.text || "", language: j.language || "", segments: j.segments || [], duration: j.duration || 0 };
   }
 
@@ -80,6 +90,7 @@ export class GroqProvider {
       if (e instanceof ApiError && e.kind === "bad_request" && Object.keys(quirks).length) j = await send({});
       else throw e;
     }
+    this.lastUsage = { tokens: j.usage?.total_tokens || 0 };
     return j.choices?.[0]?.message?.content || "";
   }
 }

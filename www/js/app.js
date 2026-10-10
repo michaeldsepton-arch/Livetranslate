@@ -11,6 +11,8 @@ import { SessionStore, IdbBackend, MemoryBackend } from "./store.js";
 import { buildTxt, suggestFilename, suggestTitle } from "./engine/transcript.js";
 import { DemoEngine } from "./demo.js";
 import { loadQuran } from "./engine/quran.js";
+import { UsageTracker } from "./engine/usage.js";
+import { PROVIDER_LABEL, providerOf, roleOf } from "./engine/limits.js";
 import { debounce, wordCount } from "./util.js";
 import { toast } from "./ui/overlay.js";
 import * as platform from "./platform.js";
@@ -37,6 +39,9 @@ export class App extends Emitter {
     this.health = { level: "idle", text: "" };
     this.isDemo = false;
     this.autoPaused = false;
+    this.usage = new UsageTracker();
+    this._alerted = new Set();
+    this.usage.on(() => this._checkAllowance());
     this.autosave = debounce(() => this._persist(), 1500);
     this.applySettings();
   }
@@ -73,6 +78,7 @@ export class App extends Emitter {
       preferGemini: s.preferGemini && !!providers.gemini,
       overrides: { stt: s.modelStt.trim(), llm: s.modelLlm.trim(), gemini: s.modelGemini.trim() },
       onNotice: (n) => this._notice(n),
+      usage: this.usage,
     });
   }
 
@@ -129,7 +135,8 @@ export class App extends Emitter {
         await router.init();
         if (router.exhausted) throw new Error("Your API key was rejected. Check it in Settings → Connection.");
         const quran = this.settings.quranMatching ? await loadQuran() : null;
-        this.engine = new LectureEngine({ router, settings: this.settings, quran });
+        const preset = DELAY_PRESETS[this.settings.delay] || DELAY_PRESETS.balanced;
+        this.engine = new LectureEngine({ router, settings: this.settings, quran, usage: this.usage, maxParallelStt: preset.parallel || 2 });
         const p = DELAY_PRESETS[this.settings.delay] || DELAY_PRESETS.balanced;
         this.chunker = new Chunker({
           minChunkMs: p.minChunkMs,
@@ -314,6 +321,54 @@ export class App extends Emitter {
     } else {
       toast("Lecture saved in your Library.", { kind: "ok" });
     }
+  }
+
+  /** Stop right now and throw the lecture away: nothing is saved, no .txt is written. */
+  async discard() {
+    if (!(this.phase === "recording" || this.phase === "paused")) return;
+    clearInterval(this.clock);
+    this.autosave.cancel();
+    if (this.capture) this.capture.stop();
+    if (this.engine) this.engine.stop(); // cancels requests still in flight
+    platform.keepAwake(false);
+    this._service(false);
+    const id = this.session && !this.isDemo ? this.session.id : null;
+    this.session = null;
+    this.engine = null;
+    this.entries = [];
+    this.elapsed = 0;
+    this.speaking = false;
+    this.phase = "idle";
+    if (id) await this.store.remove(id).catch(() => {});
+    this._level(0);
+    this.emit("speech", false);
+    this.emit("phase", this.phase);
+    this.emit("entries", this.entries);
+    toast("Lecture deleted. Nothing was saved.", { ms: 3500 });
+  }
+
+  /** Warn once when a free allowance is getting used up (80 % and 95 %). */
+  _checkAllowance() {
+    clearTimeout(this._allowanceTimer);
+    this._allowanceTimer = setTimeout(() => {
+      for (const id of this.usage.usedIds()) {
+        for (const r of this.usage.rows(id)) {
+          if (r.frac == null) continue;
+          for (const level of [0.95, 0.8]) {
+            const key = `${id}|${r.key}|${level}|${Math.floor(Date.now() / 3600000)}`;
+            if (r.frac >= level) {
+              if (!this._alerted.has(key)) {
+                this._alerted.add(key);
+                const what = roleOf(id) === "Speech" ? "speech" : "translation";
+                const backup = this.settings.geminiKey.trim() && providerOf(id) === "groq" ? " Gemini will take over if you added its key." : "";
+                toast(`${PROVIDER_LABEL[providerOf(id)] || providerOf(id)} ${what} allowance is ${Math.round(r.frac * 100)}% used (${r.label.toLowerCase()}).${backup}`, { kind: "warn", ms: 7000 });
+              }
+              break;
+            }
+          }
+        }
+      }
+    }, 2000);
   }
 
   newLecture() {

@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS = {
 
 /** How "smooth vs quick" maps onto chunking + how long we wait for the following sentence. */
 export const DELAY_PRESETS = {
+  instant: { label: "Instant", approx: "≈ 3–4 s behind", minChunkMs: 1500, maxChunkMs: 3200, endSilenceMs: 260, lookaheadWaitMs: 0, parallel: 3 },
   quick: { label: "Quick", approx: "≈ 6 s behind", minChunkMs: 3000, maxChunkMs: 7000, endSilenceMs: 450, lookaheadWaitMs: 0 },
   balanced: { label: "Balanced", approx: "≈ 10 s behind", minChunkMs: 3500, maxChunkMs: 9000, endSilenceMs: 600, lookaheadWaitMs: 4500 },
   smooth: { label: "Smooth", approx: "≈ 15 s behind", minChunkMs: 4000, maxChunkMs: 11000, endSilenceMs: 700, lookaheadWaitMs: 9000 },

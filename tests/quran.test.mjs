@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { QuranIndex } from "../www/js/engine/quran.js";
-import { englishScore, looksLikeEnglish } from "../www/js/engine/english.js";
+import { englishScore, looksLikeEnglish, looksTransliterated } from "../www/js/engine/english.js";
 import { normalizeArabic } from "../www/js/engine/arabic.js";
 
 const data = JSON.parse(readFileSync(new URL("../www/data/quran-ar.json", import.meta.url)));
@@ -82,4 +82,13 @@ test("phrases that occur all over the Qur'an are not pinned to a made-up verse",
   // but a longer, unambiguous stretch of the same surah is recognised
   const r = quran.annotate("الحمد لله رب العالمين الرحمن الرحيم مالك يوم الدين");
   assert.equal(r.refs[0].label, "Al-Fatihah 1:2–4");
+});
+
+test("transliterated sentences are detected; single terms and short expressions are fine", () => {
+  assert.ok(looksTransliterated("Tabbat yada abi lahabin wa tabb ma aghna anhu maluhu wa ma kasab"));
+  assert.ok(looksTransliterated("Hasbunallahu wa ni'mal wakil wa la hawla wa la quwwata illa billah"));
+  assert.ok(!looksTransliterated("Alhamdulillah."));
+  assert.ok(!looksTransliterated("Subhan Allah, Subhan Allah, Subhan Allah, Subhan Allah, Subhan Allah"));
+  assert.ok(!looksTransliterated("Taqwa is the foundation, and salah is its pillar."));
+  assert.ok(!looksTransliterated("He told them about zakah and the importance of sincerity in every deed."));
 });

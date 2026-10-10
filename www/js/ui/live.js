@@ -3,6 +3,7 @@ import { h } from "../util.js";
 import { icon } from "./icons.js";
 import { TranscriptView } from "./transcript-view.js";
 import { viewToolbar, statusPill, fmtElapsed } from "./common.js";
+import { allowanceChip } from "./usage.js";
 
 export function buildLive(app, screen) {
   const pill = statusPill();
@@ -28,7 +29,8 @@ export function buildLive(app, screen) {
     "div",
     { class: "strip" },
     h("div", { class: "chip rec" }, h("span", { class: "rd" }), timerText),
-    h("button", { class: "chip", onclick: () => (app.phase === "paused" ? app.resume() : app.pause()) }, pauseIcon, pauseLabel)
+    h("button", { class: "chip", onclick: () => (app.phase === "paused" ? app.resume() : app.pause()) }, pauseIcon, pauseLabel),
+    allowanceChip(app)
   );
 
   screen.append(header, toolbar, scroll, jump, strip);

@@ -15,13 +15,15 @@ and get confused when an English interpreter starts speaking.
 | You asked for | How it is done |
 |---|---|
 | **Press a mic button, nothing else** | One big button starts and stops. The lecture is auto-saved while recording, so nothing is lost if the phone dies. |
-| **A few seconds behind, so it has context — no choppy, changing text** | Each sentence is held briefly so the translator can see the *next* sentence too, then shown **once and never rewritten**. Three presets: Quick (~6 s behind), Balanced (~10 s, default), Smooth (~15 s). |
+| **A few seconds behind, so it has context — no choppy, changing text** | Each sentence is held briefly so the translator can see the *next* sentence too, then shown **once and never rewritten**. Four presets: **Instant (~3–4 s behind)**, Quick (~6 s), Balanced (~10 s, default), Smooth (~15 s). Instant translates every couple of seconds — a little more fragmentary, and it uses the free allowance about three times faster. |
 | **Understands Islamic terms and names** | Whisper large-v3 for the Arabic, primed with a religious-lecture vocabulary. A built-in glossary of **~500** terms, prophets, Companions, scholars, places, books and all 114 surahs is handed to the translator whenever it appears. You can add your own names in *Settings → My names & terms*, and describe the lecture ("Seerah class by Shaykh X") for extra context. |
 | **A continuous script for the whole lecture** | Sentences flow into paragraphs with timestamps; the screen follows the lecture, and you can scroll back without losing your place. |
 | **An English interpreter speaks too** | Every audio chunk is language-detected. English is shown as **Interpreter** text (italic, gold bar) and is never re-translated; Arabic is translated. The interpreter's words are also given to the translator as context for the next Arabic passage. |
 | **Save the transcript as a text file** | When you stop, a `.txt` is written to **Downloads/Lisan** (and kept in the in-app **Library**). Share, copy, rename, re-export or delete any lecture later (delete has an Undo; long-press to select several). |
 | **Free** | Uses the free tiers of Groq (Whisper + an open LLM) and, optionally, Google Gemini as a backup. No subscription, no card. |
 | **Qur'an recitation** | Recited verses are recognised against the full text of the Qur'an: the exact Arabic (with diacritics) replaces any mis-heard words, the surah and verse are tagged (e.g. *Al-Masad 111:2–5*), and the translator is told it is translating the Qur'an so it gives the true meaning. Works for verses quoted inside a lecture too. Can be switched off in Settings. |
+| **Know your free limits** | *Settings → Free allowance* (and a chip while recording) shows, per model, how much of the free Groq / Gemini allowance this phone has used — speech minutes this hour and today, requests, tokens — with a warning at 80 % and 95 %, an estimate of how long it will last at your current pace, and links to the official usage pages. It also paces requests so short chunks don't hit the per-minute limit. |
+| **Only words are transliterated** | Single Islamic terms and names stay as words (taqwa, salah, hadith…) plus a few short expressions (Alhamdulillah, InshaAllah…). Sentences, verses and supplications are always translated; if the translator ever transliterates a sentence it is asked again. |
 | **Fusha, with the odd Saudi word** | The translator is told the speaker uses Modern Standard Arabic and may slip into Saudi (Najdi/Hijazi) colloquial words, and to read those in context. Change it in *Settings → This lecture → The speaker's Arabic*. |
 | **Nice design from the logo** | Navy / gold / cream palette taken from the logo; Amiri for Arabic, Literata for reading, dark and light themes. |
 
@@ -56,7 +58,7 @@ daily allowance runs out mid-lecture, the app switches over by itself.
 * Leave **Noise suppression** and **Automatic volume** on. If quiet speech is missed raise *Sensitivity*; if it hears chatter lower it.
 * Fill in **This lecture** in Settings (speaker, topic, names you expect). It makes a noticeable difference to spelling and meaning.
 * Screen off is optional: press the power button and Lisan keeps listening (notification shown). Screen on is still best — you can read along.
-* Use **Pause** for breaks (the lecture continues in the same transcript); **stop** (the red button) to finish and save.
+* Use **Pause** for breaks (the lecture continues in the same transcript). The red **stop** button asks: *Stop and save*, *Keep recording*, or *Delete, don't save* (tap twice, nothing is kept).
 * No interpreter? Set *Who is speaking?* to **Arabic only** — slightly more accurate.
 * Try **Try a demo lecture** on the home screen to see exactly how it looks, no key needed.
 

@@ -26,3 +26,19 @@ export function looksLikeEnglish(text) {
   const score = englishScore(text);
   return words.length <= 2 ? score >= 0.5 : score >= 0.25;
 }
+
+// Short fixed expressions that are *meant* to stay transliterated (so a line of "SubhanAllah, SubhanAllah…" is fine).
+const KEEP = new Set(`subhanallah subhan allah alhamdulillah allahu akbar inshaallah mashaallah bismillah astaghfirullah assalamu alaykum salah
+zakah taqwa tawhid hadith sunnah fiqh jannah ameen amin`.split(/\s+/));
+
+/**
+ * True when a "translation" is really Arabic written in Latin letters (a whole sentence transliterated).
+ * Needs a few words so a lone "Alhamdulillah." is never flagged.
+ */
+export function looksTransliterated(text) {
+  const words = englishWords(text);
+  if (words.length < 5) return false;
+  const common = words.filter((w) => COMMON.has(w)).length / words.length;
+  const kept = words.filter((w) => KEEP.has(w)).length / words.length;
+  return common < 0.15 && kept < 0.4;
+}

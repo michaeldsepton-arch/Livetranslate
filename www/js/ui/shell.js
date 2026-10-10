@@ -35,19 +35,39 @@ export function buildShell(app) {
     if (app.phase === "starting" || app.phase === "finishing") return;
     if (app.phase === "recording" || app.phase === "paused") {
       if (app.nav !== "live") return app.go("live");
-      const stop = await confirmSheet({
-        title: "End this lecture?",
-        text: "The transcript will be saved to your Library" + (app.settings.autoSave ? " and as a .txt file in Downloads." : "."),
-        confirm: "Stop and save",
-        cancel: "Keep recording",
-      });
-      if (stop) app.stop();
+      openStopSheet();
       return;
     }
     if (app.nav !== "live") app.go("live");
     if (app.phase === "finished") app.newLecture();
     app.start();
   });
+
+  function openStopSheet() {
+    openSheet((close) => {
+      let armed = false, timer = null;
+      const discard = h("button", { class: "btn danger block" }, icon("trash"), "Delete, don't save");
+      discard.onclick = () => {
+        if (!armed) {
+          armed = true;
+          discard.replaceChildren(icon("trash"), "Tap again to delete for good");
+          timer = setTimeout(() => { armed = false; discard.replaceChildren(icon("trash"), "Delete, don't save"); }, 4000);
+          return;
+        }
+        clearTimeout(timer);
+        close();
+        app.discard();
+      };
+      return [
+        h("h3", {}, "End this lecture?"),
+        h("p", {}, "Save keeps the transcript in your Library" + (app.settings.autoSave ? " and as a .txt file in Downloads." : ".")),
+        h("div", { class: "stack" },
+          h("button", { class: "btn primary block", onclick: () => { close(); app.stop(); } }, "Stop and save"),
+          h("button", { class: "btn block", onclick: close }, "Keep recording"),
+          discard),
+      ];
+    });
+  }
 
   function renderMic() {
     const rec = app.phase === "recording" || app.phase === "paused";

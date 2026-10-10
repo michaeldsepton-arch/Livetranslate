@@ -8,6 +8,7 @@ import { builtinGlossary } from "../engine/glossary.js";
 import { MicCapture } from "../audio/capture.js";
 import { Chunker } from "../audio/chunker.js";
 import { toast } from "./overlay.js";
+import { usagePanel, officialLinks } from "./usage.js";
 import { APP_VERSION } from "../version.js";
 
 function keyField(app, { provider, label, field, placeholder, link, linkText, hint }) {
@@ -91,7 +92,7 @@ export function buildSettings(app, screen) {
   showSens();
 
   const delayNote = h("div", { class: "seg-note" });
-  const showDelay = (k) => (delayNote.textContent = `${DELAY_PRESETS[k].approx}. ` + { quick: "Fastest, with a little less context. Uses your free daily allowance faster.", balanced: "Waits a few seconds for the next phrase so sentences flow naturally.", smooth: "Most polished: waits longest to see the whole thought. Best for complex talks." }[k]);
+  const showDelay = (k) => (delayNote.textContent = `${DELAY_PRESETS[k].approx}. ` + { instant: "Shortest delay: translates every couple of seconds. A little more fragmentary, and it uses your free allowance about three times faster — watch the allowance chip.", quick: "Fast, with a little less context. Uses your free allowance faster.", balanced: "Waits a few seconds for the next phrase so sentences flow naturally.", smooth: "Most polished: waits longest to see the whole thought. Best for complex talks." }[k]);
   showDelay(s.delay);
 
   const textSize = h("input", { type: "range", min: "0.8", max: "1.6", step: "0.05", value: String(s.textSize), "aria-label": "Text size" });
@@ -136,6 +137,13 @@ export function buildSettings(app, screen) {
           delayNote),
 
         h("section", { class: "card" },
+          h("h3", {}, icon("battery"), "Free allowance"),
+          h("p", { class: "hint" }, "How much of the free Groq / Gemini limits you've used. A chip with the most-used limit also shows while recording; tap it for this screen."),
+          usagePanel(app),
+          officialLinks(),
+          h("div", { style: "margin-top:12px" }, h("button", { class: "btn small", onclick: () => { app.usage.clear(); toast("Counters reset on this phone"); } }, "Reset counters"))),
+
+        h("section", { class: "card" },
           h("h3", {}, icon("library"), "My names & terms"),
           h("p", { class: "hint" }, `Already knows ${builtinGlossary().length}+ Islamic terms, prophets, Companions, scholars, places and surahs. Add anything it gets wrong: the Arabic as spoken, and how you want it written.`),
           glossaryEditor(app)),
@@ -143,7 +151,8 @@ export function buildSettings(app, screen) {
         h("section", { class: "card" },
           h("h3", {}, icon("globe"), "Translation style"),
           h("div", { class: "field" }, h("label", {}, "Islamic terms"),
-            segmented([["keep", "Keep terms (salah, taqwa)"], ["english", "Plain English"]], s.termStyle, (v) => app.update({ termStyle: v }))),
+            segmented([["keep", "Keep terms (salah, taqwa)"], ["english", "Plain English"]], s.termStyle, (v) => app.update({ termStyle: v })),
+            h("div", { class: "seg-note" }, "Only single words stay as words. Sentences, verses and supplications are always translated into English.")),
           h("div", { class: "field" }, h("label", {}, "Honorifics"),
             segmented([["short", "ﷺ  (RA)  (RH)"], ["full", "Written out"]], s.honorifics, (v) => app.update({ honorifics: v })))),
 

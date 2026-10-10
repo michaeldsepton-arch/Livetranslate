@@ -10,8 +10,9 @@ export class Router {
    * @param {{groq?:object, gemini?:object}} providers   keyed providers (absent = no key)
    * @param {{preferGemini?:boolean, models?:object}} opts
    */
-  constructor(providers, { preferGemini = false, overrides = {}, now = Date.now, sleep = defaultSleep, onNotice = () => {} } = {}) {
+  constructor(providers, { preferGemini = false, overrides = {}, now = Date.now, sleep = defaultSleep, onNotice = () => {}, usage = null } = {}) {
     this.providers = providers;
+    this.usage = usage; // optional UsageTracker: lets us pace requests under each model's per-minute limit
     this.preferGemini = preferGemini;
     this.overrides = overrides; // {stt, llm, gemini}: user-typed model ids (advanced)
     this.now = now;
@@ -93,16 +94,17 @@ export class Router {
       const chain = this.chain(kind);
       if (!chain.length) throw new ApiError("No working API key. Add or fix your key in Settings.", { kind: "auth" });
       const t = this.now();
-      const ready = chain.filter((it) => (this.cool.get(it.id) || 0) <= t);
+      const pace = (it) => (this.usage ? this.usage.pace(it.id) : 0);
+      const ready = chain.filter((it) => (this.cool.get(it.id) || 0) <= t && pace(it) === 0);
       if (!ready.length) {
-        const until = Math.min(...chain.map((it) => this.cool.get(it.id) || 0));
-        const wait = Math.max(500, until - t);
+        const wait = Math.max(300, Math.min(...chain.map((it) => Math.max((this.cool.get(it.id) || 0) - t, pace(it)))));
         if (this.now() - start + wait > maxWaitMs) throw new ApiError("Free limit reached for now", { kind: "quota" });
-        this.notice("rate", "warn", `Free limit reached — continuing in ${Math.ceil(wait / 1000)}s`);
+        if (wait >= 3000) this.notice("rate", "warn", `Free limit reached — continuing in ${Math.ceil(wait / 1000)}s`);
         await this.sleep(Math.min(wait, 15000));
         continue;
       }
       const item = ready[0];
+      if (this.usage) this.usage.touch(item.id);
       try {
         const value = await fn(item);
         this.notice("ok", "ok", "");

@@ -16,8 +16,9 @@ import { cleanTranscript } from "./hallucination.js";
 import { ApiError } from "./errors.js";
 import { scriptLang, langCode, ARABIC_LOOKALIKES, lastWords } from "./arabic.js";
 import { buildSystemPrompt, buildUserPrompt, cleanTranslation } from "./prompts.js";
-import { looksLikeEnglish } from "./english.js";
+import { looksLikeEnglish, looksTransliterated } from "./english.js";
 import { DELAY_PRESETS } from "../settings.js";
+import { MIN_BILLED_AUDIO_SEC } from "./limits.js";
 
 export class Emitter {
   constructor() {
@@ -41,8 +42,9 @@ export class Emitter {
 const NOISE_ENGLISH = /^(thank you|thanks|thanks for watching|bye|you|okay|ok|so|yeah|um|uh|hmm)[.!\s]*$/i;
 
 export class LectureEngine extends Emitter {
-  constructor({ router, settings, now = () => Date.now(), maxParallelStt = 2, quran = null } = {}) {
+  constructor({ router, settings, now = () => Date.now(), maxParallelStt = 2, quran = null, usage = null } = {}) {
     super();
+    this.usage = usage; // UsageTracker | null
     this.quran = quran; // QuranIndex | null: restores exact verse text when recitation is recognised
     this.quranNext = null;
     this.quranMisses = 0;
@@ -121,7 +123,9 @@ export class LectureEngine extends Emitter {
       const language = this.settings.lectureLang === "ar" ? "ar" : undefined;
       const prompt = buildWhisperPrompt({ userTerms: this.userTerms, tail: this.arTail });
       const call = (lang) => (item) => this.router.providers[item.provider].transcribe(wav, { model: item.model, language: lang, prompt, signal: this.abort.signal });
-      let { value: res } = await this.router.run("stt", call(language), { signal: this.abort.signal });
+      const secs = Math.max(0, e.t1 - e.t0);
+      let { value: res, item: used } = await this.router.run("stt", call(language), { signal: this.abort.signal });
+      this._recordUsage(used, secs);
       if (!language) {
         const said = langCode(res.language);
         const script = scriptLang(res.text);
@@ -133,7 +137,9 @@ export class LectureEngine extends Emitter {
         if (again) {
           // for English, drop the Arabic primer so it cannot pull the output back into Arabic script
           const retry = (item) => this.router.providers[item.provider].transcribe(wav, { model: item.model, language: again, prompt: again === "en" ? "" : prompt, signal: this.abort.signal });
-          ({ value: res } = await this.router.run("stt", retry, { signal: this.abort.signal }));
+          const again2 = await this.router.run("stt", retry, { signal: this.abort.signal });
+          res = again2.value;
+          this._recordUsage(again2.item, secs);
         }
       }
       return res;
@@ -196,6 +202,15 @@ export class LectureEngine extends Emitter {
     this._pump();
   }
 
+  /** Count a finished request against the model's free allowance. */
+  _recordUsage(item, audioSec = 0) {
+    if (!this.usage) return;
+    const prov = this.router.providers[item.provider] || {};
+    const billed = item.provider === "groq" && audioSec ? Math.max(MIN_BILLED_AUDIO_SEC, audioSec) : audioSec;
+    this.usage.record(item.id, { audio: billed, tokens: (prov.lastUsage && prov.lastUsage.tokens) || 0 });
+    if (prov.lastReported) this.usage.setReported(item.id, prov.lastReported);
+  }
+
   _drop(e) {
     const i = this.entries.indexOf(e);
     if (i >= 0) this.entries.splice(i, 1);
@@ -221,6 +236,17 @@ export class LectureEngine extends Emitter {
     if (!ready) {
       this.timer = setTimeout(() => this._pump(), Math.max(50, wait - waited));
       return;
+    }
+    // catch-up: if the translator has fallen behind (rate limit, slow network), translate several waiting slices as one request
+    for (let guard = 0; guard < 2; guard++) {
+      const nx = this.entries[idx + 1];
+      if (!nx || nx.state !== "awaiting" || nx.kind !== "lecture" || nx.breakBefore) break;
+      if (this.entries.slice(idx + 1).filter((x) => x.state === "awaiting").length < 2) break;
+      e.ar = `${e.ar} ${nx.ar}`.trim();
+      e.t1 = nx.t1;
+      if (nx.quran) e.quran = [...(e.quran || []), ...nx.quran];
+      this.entries.splice(idx + 1, 1);
+      this.emit("remove", nx);
     }
     this._translate(e, idx);
   }
@@ -249,7 +275,19 @@ export class LectureEngine extends Emitter {
         (it) => this.router.providers[it.provider].chat({ model: it.model, system: this.system, user, signal: this.abort.signal }),
         { signal: this.abort.signal }
       );
-      const en = cleanTranslation(value);
+      this._recordUsage(item);
+      let en = cleanTranslation(value);
+      if (looksTransliterated(en)) {
+        // the model wrote Arabic in Latin letters instead of translating: insist once, then give up
+        const again = await this.router.run(
+          "llm",
+          (it) => this.router.providers[it.provider].chat({ model: it.model, system: this.system, user: user + "\n\nIMPORTANT: your previous answer was a transliteration. Write the English MEANING of CURRENT in ordinary English words. Transliterate nothing except single terms such as salah or taqwa.", signal: this.abort.signal }),
+          { signal: this.abort.signal }
+        );
+        this._recordUsage(again.item);
+        en = cleanTranslation(again.value);
+        if (looksTransliterated(en)) throw new ApiError("The translator gave a transliteration instead of a translation", { kind: "unknown" });
+      }
       if (!en) throw new ApiError("The translator returned nothing", { kind: "unknown" });
       e.en = en;
       e.model = item.id;

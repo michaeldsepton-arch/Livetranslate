@@ -441,25 +441,25 @@ export const GLOSSARY_TEXT = `
 الأدب المفرد = al-Adab al-Mufrad
 السنن = the Sunan
 
-# Common phrases (kept transliterated)
-بسم الله الرحمن الرحيم = Bismillah ir-Rahman ir-Rahim (In the name of Allah, the Most Gracious, the Most Merciful)
+# Common phrases: sentences are TRANSLATED; only the short fixed expressions below stay as words
+بسم الله الرحمن الرحيم = In the name of Allah, the Most Gracious, the Most Merciful
 بسم الله = Bismillah
-الحمد لله = Alhamdulillah (all praise is due to Allah)
-سبحان الله = SubhanAllah (glory be to Allah)
+الحمد لله = Alhamdulillah
+سبحان الله = SubhanAllah
 الله أكبر = Allahu Akbar
-لا إله إلا الله = La ilaha illa Allah (there is no god but Allah)
-إن شاء الله = InshaAllah (if Allah wills)
+لا إله إلا الله = There is no god but Allah
+إن شاء الله = InshaAllah
 ما شاء الله = MashaAllah
-أستغفر الله = Astaghfirullah (I seek Allah's forgiveness)
-لا حول ولا قوة إلا بالله = La hawla wa la quwwata illa billah
-جزاك الله خيرا = Jazak Allahu khayran
-بارك الله فيك = Barak Allahu feek
+أستغفر الله = Astaghfirullah
+لا حول ولا قوة إلا بالله = There is no power and no strength except with Allah
+جزاك الله خيرا = May Allah reward you with goodness
+بارك الله فيك = May Allah bless you
 السلام عليكم = Assalamu alaykum
-أعوذ بالله = A'udhu billah (I seek refuge in Allah)
-حسبنا الله ونعم الوكيل = Hasbunallahu wa ni'mal wakil
-إنا لله وإنا إليه راجعون = Inna lillahi wa inna ilayhi raji'un
-والله أعلم = and Allah knows best (wallahu a'lam)
-اللهم = O Allah (Allahumma)
+أعوذ بالله = I seek refuge in Allah
+حسبنا الله ونعم الوكيل = Allah is sufficient for us, and He is the best disposer of affairs
+إنا لله وإنا إليه راجعون = Indeed, to Allah we belong, and to Him we shall return
+والله أعلم = and Allah knows best
+اللهم = O Allah
 
 # Surahs (matched only after the word "surah")
 سورة الفاتحة = Surah Al-Fatihah
