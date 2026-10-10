@@ -48,7 +48,7 @@ export class LectureEngine extends Emitter {
     this.cfg = DELAY_PRESETS[settings.delay] || DELAY_PRESETS.balanced;
     this.glossary = new Glossary(settings.customGlossary || []);
     this.userTerms = (settings.customGlossary || []).map((e) => e.ar.split("|")[0].trim()).filter(Boolean);
-    this.system = buildSystemPrompt({ termStyle: settings.termStyle, honorifics: settings.honorifics });
+    this.system = buildSystemPrompt({ termStyle: settings.termStyle, honorifics: settings.honorifics, dialect: settings.dialect });
     this.entries = [];
     this.audio = new Map(); // entry id -> wav (kept until the speech is transcribed)
     this.seq = 0;

@@ -35,6 +35,7 @@ export class App extends Emitter {
     this.speaking = false;
     this.health = { level: "idle", text: "" };
     this.isDemo = false;
+    this.autoPaused = false;
     this.autosave = debounce(() => this._persist(), 1500);
     this.applySettings();
   }
@@ -166,8 +167,15 @@ export class App extends Emitter {
     this.phase = "recording";
     this._startClock();
     platform.keepAwake(true);
+    if (!demo) this._service(true);
     this.emit("phase", this.phase);
     this.emit("entries", this.entries);
+  }
+
+  /** The "Lisan is listening" foreground service (lets recording continue with the screen off). */
+  _service(on) {
+    if (on && this.settings.backgroundListening) platform.startListening();
+    else if (!on) platform.stopListening();
   }
 
   async _openMic() {
@@ -176,7 +184,8 @@ export class App extends Emitter {
       onError: (msg) => {
         if (this.phase === "recording") {
           this.pause(true);
-          toast(msg + " Tap resume to continue.", { kind: "warn", ms: 8000 });
+          this.autoPaused = true; // came back automatically when the app is on screen again
+          toast(msg, { kind: "warn", ms: 6000 });
         }
       },
       noiseSuppression: this.settings.noiseSuppression,
@@ -196,12 +205,30 @@ export class App extends Emitter {
       if (this.phase === "recording") {
         this.elapsed += 1;
         this.emit("clock", this.elapsed);
+        // the OS can silently stall the microphone; when we are on screen, notice and restart it
+        if (this.capture && !this.isDemo && document.visibilityState === "visible" && !this.capture.healthy && !this._restarting) this._restartMic();
       }
     }, 1000);
   }
 
+  async _restartMic() {
+    this._restarting = true;
+    try {
+      if (this.capture && this.capture.ctx && this.capture.ctx.state === "suspended") await this.capture.ctx.resume();
+      if (this.capture && this.capture.healthy) return;
+      this.capture && this.capture.stop();
+      await this._openMic();
+    } catch (e) {
+      this.pause(true);
+      toast(e.message, { kind: "warn" });
+    } finally {
+      this._restarting = false;
+    }
+  }
+
   pause(auto = false) {
     if (this.phase !== "recording") return;
+    this.autoPaused = false;
     this.phase = "paused";
     if (this.capture) {
       this.capture.stop();
@@ -210,6 +237,7 @@ export class App extends Emitter {
     this.engine.markBreak && this.engine.markBreak();
     this._level(0);
     platform.keepAwake(false);
+    this._service(false);
     this.emit("phase", this.phase);
     if (!auto) this.autosave.flush();
   }
@@ -222,22 +250,21 @@ export class App extends Emitter {
       toast(e.message, { kind: "err" });
       return;
     }
+    this.autoPaused = false;
     this.phase = "recording";
     platform.keepAwake(true);
+    if (!this.isDemo) this._service(true);
     this.emit("phase", this.phase);
   }
 
   /** App returned to the foreground: Android may have taken the microphone away meanwhile. */
   async onForeground() {
-    if (this.phase === "recording" && this.capture && !this.capture.running) {
-      try {
-        await this._openMic();
-        toast("Welcome back — listening again.", { kind: "ok", ms: 2500 });
-      } catch (e) {
-        this.pause(true);
-        toast(e.message, { kind: "warn" });
-      }
+    if (this.phase === "paused" && this.autoPaused) {
+      await this.resume();
+      if (this.phase === "recording") toast("Welcome back — listening again.", { kind: "ok", ms: 2500 });
+      return;
     }
+    if (this.phase === "recording" && this.capture && !this.capture.healthy) await this._restartMic();
     if (this.phase === "recording") platform.keepAwake(true);
   }
 
@@ -255,6 +282,7 @@ export class App extends Emitter {
     this.emit("speech", false);
     await this.engine.finish();
     platform.keepAwake(false);
+    this._service(false);
 
     this.session.entries = this.engine.snapshot();
     this.session.durationSec = this.elapsed;

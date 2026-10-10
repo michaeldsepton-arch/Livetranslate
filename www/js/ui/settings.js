@@ -121,6 +121,9 @@ export function buildSettings(app, screen) {
           h("h3", {}, icon("spark"), "This lecture"),
           h("p", { class: "hint" }, "Tell the translator who is speaking and what about. Names and topics here improve spelling and meaning."),
           h("div", { class: "field" }, ctx),
+          h("div", { class: "field" }, h("label", {}, "The speaker's Arabic"),
+            segmented([["fusha", "Fusha"], ["saudi", "Fusha + Saudi"], ["other", "Other dialect"]], s.dialect, (v) => app.update({ dialect: v })),
+            h("div", { class: "seg-note" }, "Standard Arabic is the default; \"Fusha + Saudi\" also understands everyday Saudi words that slip in.")),
           h("div", { class: "field" }, h("label", {}, "Who is speaking?"),
             segmented([["auto", "Sheikh + English interpreter"], ["ar", "Arabic only"]], s.lectureLang, (v) => app.update({ lectureLang: v })),
             h("div", { class: "seg-note" }, "With an interpreter, English speech is detected automatically and shown as their words — it is never re-translated."))),
@@ -151,6 +154,7 @@ export function buildSettings(app, screen) {
 
         h("section", { class: "card" },
           h("h3", {}, icon("mic"), "Microphone"),
+          toggleRow("Keep listening with the screen off", "Shows a “Lisan is listening” notification so Android doesn't stop the microphone when you lock the phone or switch apps. Takes effect next time you start.", s.backgroundListening, (v) => app.update({ backgroundListening: v })),
           toggleRow("Noise suppression", "Reduces room noise and echo", s.noiseSuppression, (v) => app.update({ noiseSuppression: v })),
           toggleRow("Automatic volume", "Boosts a distant or quiet speaker", s.autoGain, (v) => app.update({ autoGain: v })),
           h("div", { class: "field", style: "margin-top:10px" }, h("label", {}, "Sensitivity"), sens, sensLabel),

@@ -26,7 +26,9 @@ export class MicCapture {
     this.ctx = new Ctx({ latencyHint: "interactive" });
     await this.ctx.resume();
     this.resampler = new Resampler(this.ctx.sampleRate, 16000);
+    this.lastSampleAt = performance.now();
     const handle = (block) => {
+      this.lastSampleAt = performance.now();
       if (this.running) this.onSamples(this.resampler.process(block));
     };
 
@@ -51,6 +53,11 @@ export class MicCapture {
 
     const track = this.stream.getAudioTracks()[0];
     if (track) track.onended = () => this.running && this.onError("The microphone stopped (another app may have taken it).");
+  }
+
+  /** True while audio is actually flowing (the OS can silently suspend the stream in the background). */
+  get healthy() {
+    return !!(this.running && this.ctx && this.ctx.state === "running" && performance.now() - this.lastSampleAt < 4000);
   }
 
   stop() {

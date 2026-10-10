@@ -144,6 +144,32 @@ export async function keepAwake(on) {
   } catch {}
 }
 
+/**
+ * Ask Android to keep Lisan alive while the screen is off or another app is in front
+ * (shows a "Lisan is listening" notification).  Resolves true when the service started.
+ */
+export async function startListening() {
+  const native = plugin("LiveTranslateNative");
+  if (!native) return false;
+  try {
+    let asked = false;
+    try {
+      asked = !!localStorage.getItem("lt.notifAsked");
+      localStorage.setItem("lt.notifAsked", "1");
+    } catch {}
+    if (!asked) await native.requestNotifications(); // Android 13+: lets the notification show
+    const r = await native.startListening();
+    return !!(r && r.ok);
+  } catch {
+    return false;
+  }
+}
+
+export function stopListening() {
+  const native = plugin("LiveTranslateNative");
+  if (native) native.stopListening().catch(() => {});
+}
+
 export function setStatusBar(light) {
   const sb = plugin("StatusBar");
   if (sb) sb.setStyle({ style: light ? "LIGHT" : "DARK" }).catch(() => {});

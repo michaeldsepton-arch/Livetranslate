@@ -1,19 +1,27 @@
 package app.livetranslate.lecture;
 
+import android.Manifest;
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.view.WindowManager;
+import android.webkit.WebView;
+
+import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -30,8 +38,13 @@ import java.util.Map;
  *  - keepAwake:    keep the screen on while a lecture is being recorded
  *  - saveTextFile: write a transcript to Downloads/Lisan (no storage permission needed, Android 10+)
  *  - http:         fallback HTTPS client used only if the WebView blocks a request to the speech/translation APIs
+ *  - startListening / stopListening: foreground service ("Lisan is listening") so Android lets the
+ *                  microphone and network keep working with the screen off or another app in front
  */
-@CapacitorPlugin(name = "LiveTranslateNative")
+@CapacitorPlugin(
+    name = "LiveTranslateNative",
+    permissions = {@Permission(alias = "notifications", strings = {Manifest.permission.POST_NOTIFICATIONS})}
+)
 public class LiveTranslateNativePlugin extends Plugin {
 
     private static final String[] ALLOWED_HOSTS = {"api.groq.com", "generativelanguage.googleapis.com"};
@@ -47,6 +60,54 @@ public class LiveTranslateNativePlugin extends Plugin {
             }
         });
         call.resolve();
+    }
+
+    @PluginMethod
+    public void startListening(PluginCall call) {
+        JSObject res = new JSObject();
+        try {
+            ContextCompat.startForegroundService(getContext(), new Intent(getContext(), ListeningService.class));
+            // keep the web page's renderer at full priority even while the app is not on screen
+            getActivity().runOnUiThread(() -> {
+                try {
+                    getBridge().getWebView().setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
+                } catch (Exception ignored) {
+                }
+            });
+            res.put("ok", true);
+        } catch (Exception e) {
+            res.put("ok", false);
+            res.put("reason", String.valueOf(e.getMessage()));
+        }
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void stopListening(PluginCall call) {
+        try {
+            getContext().stopService(new Intent(getContext(), ListeningService.class));
+        } catch (Exception ignored) {
+        }
+        call.resolve();
+    }
+
+    /** Android 13+ asks before an app may show the "listening" notification (the service runs either way). */
+    @PluginMethod
+    public void requestNotifications(PluginCall call) {
+        if (android.os.Build.VERSION.SDK_INT < 33 || getPermissionState("notifications") == PermissionState.GRANTED) {
+            JSObject r = new JSObject();
+            r.put("granted", true);
+            call.resolve(r);
+            return;
+        }
+        requestPermissionForAlias("notifications", call, "notificationsResult");
+    }
+
+    @PermissionCallback
+    private void notificationsResult(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("granted", getPermissionState("notifications") == PermissionState.GRANTED);
+        call.resolve(r);
     }
 
     @PluginMethod

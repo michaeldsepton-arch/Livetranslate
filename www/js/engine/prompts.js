@@ -26,8 +26,14 @@ const HONORIFICS = {
   full: `HONORIFICS: Render them only where the speaker says them, written out in English: "(peace and blessings be upon him)" after the Prophet Muhammad, "(peace be upon him)" after other prophets and angels, "(may Allah be pleased with him/her/them)" after Companions, "(may Allah have mercy on him)" after scholars who have passed away, and "glorified and exalted is He" after Allah.`,
 };
 
-export function buildSystemPrompt({ termStyle = "keep", honorifics = "short" } = {}) {
-  return [BASE, TERMS[termStyle] || TERMS.keep, HONORIFICS[honorifics] || HONORIFICS.short].join("\n\n");
+const DIALECT = {
+  fusha: `ARABIC: The speaker uses Modern Standard Arabic (fusha), with classical Qur'anic and hadith wording.`,
+  saudi: `ARABIC: The speaker uses Modern Standard Arabic (fusha), with classical Qur'anic and hadith wording, and may drop into Saudi (Najdi/Hijazi) colloquial Arabic. Understand colloquial words from context, e.g. وش / إيش = what, ليش = why, الحين = now, يبغى / أبغى = wants / I want, مرة = very, كذا = like this, زين = good, وايد = a lot.`,
+  other: `ARABIC: The speaker may use Modern Standard Arabic mixed with a regional dialect. Understand colloquial words and constructions from context and translate their meaning, not their literal words.`,
+};
+
+export function buildSystemPrompt({ termStyle = "keep", honorifics = "short", dialect = "saudi" } = {}) {
+  return [BASE, DIALECT[dialect] || DIALECT.saudi, TERMS[termStyle] || TERMS.keep, HONORIFICS[honorifics] || HONORIFICS.short].join("\n\n");
 }
 
 /**

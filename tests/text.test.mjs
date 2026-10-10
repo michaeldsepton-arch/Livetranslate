@@ -103,3 +103,10 @@ test("prompts include glossary, recent text and the slice to translate", () => {
   assert.ok(buildSystemPrompt({ honorifics: "full" }).includes("peace and blessings be upon him"));
   assert.ok(buildSystemPrompt({ honorifics: "short" }).includes("ﷺ"));
 });
+
+test("dialect hint: Saudi by default, switchable", () => {
+  assert.ok(buildSystemPrompt().includes("Saudi"));
+  assert.ok(buildSystemPrompt({ dialect: "saudi" }).includes("وش"));
+  assert.ok(!buildSystemPrompt({ dialect: "fusha" }).includes("Saudi"));
+  assert.ok(buildSystemPrompt({ dialect: "other" }).includes("regional dialect"));
+});

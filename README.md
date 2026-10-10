@@ -21,6 +21,7 @@ and get confused when an English interpreter starts speaking.
 | **An English interpreter speaks too** | Every audio chunk is language-detected. English is shown as **Interpreter** text (italic, gold bar) and is never re-translated; Arabic is translated. The interpreter's words are also given to the translator as context for the next Arabic passage. |
 | **Save the transcript as a text file** | When you stop, a `.txt` is written to **Downloads/Lisan** (and kept in the in-app **Library**). Share, copy, rename or re-export any lecture later. |
 | **Free** | Uses the free tiers of Groq (Whisper + an open LLM) and, optionally, Google Gemini as a backup. No subscription, no card. |
+| **Fusha, with the odd Saudi word** | The translator is told the speaker uses Modern Standard Arabic and may slip into Saudi (Najdi/Hijazi) colloquial words, and to read those in context. Change it in *Settings → This lecture → The speaker's Arabic*. |
 | **Nice design from the logo** | Navy / gold / cream palette taken from the logo; Amiri for Arabic, Literata for reading, dark and light themes. |
 
 ## Install the app (about 2 minutes)
@@ -53,6 +54,7 @@ daily allowance runs out mid-lecture, the app switches over by itself.
 * Put the phone **near the speaker or the PA speaker**, screen up. The screen stays awake while recording; plug in if it's a long one.
 * Leave **Noise suppression** and **Automatic volume** on. If quiet speech is missed raise *Sensitivity*; if it hears chatter lower it.
 * Fill in **This lecture** in Settings (speaker, topic, names you expect). It makes a noticeable difference to spelling and meaning.
+* Screen off is optional: press the power button and Lisan keeps listening (notification shown). Screen on is still best — you can read along.
 * Use **Pause** for breaks (the lecture continues in the same transcript); **stop** (the red button) to finish and save.
 * No interpreter? Set *Who is speaking?* to **Arabic only** — slightly more accurate.
 * Try **Try a demo lecture** on the home screen to see exactly how it looks, no key needed.
@@ -89,8 +91,13 @@ back-to-back all-day sessions may switch to the backup key, or wait for the dail
   several people talking at once reduce accuracy. Qur'anic verses and hadith are translated by meaning — check important quotes against
   reliable sources.
 * **No speaker names.** It separates *Arabic* from *English* (sheikh vs interpreter) but doesn't tell two Arabic speakers apart.
-* While the screen is off, Android may stop the microphone. Keep the app open (it keeps the screen on for you).
-* Android 8+ only; Android 10+ writes the `.txt` straight to Downloads (older versions open the Share sheet instead).
+* **Screen on is the reliable way.** The app keeps the screen awake while recording. You can also lock the phone or switch apps: a
+  “Lisan is listening” notification asks Android to keep the microphone running (switch off in *Settings → Microphone*). If Android
+  ever interrupts the microphone anyway, Lisan restarts it when you return and marks a paragraph break where audio was missed.
+* Android 6+; Android 10+ writes the `.txt` straight to Downloads (older versions open the Share sheet instead).
+* **Installing outside the Play Store.** Android is gradually adding a *developer verification* step for apps installed from outside the
+  Play Store (it started in a few countries in September 2026 and widens in 2027). If your phone blocks the install, look for
+  Android's “advanced flow”/“install anyway” option in its warning, or open an issue with the exact message you see.
 
 ## Build it yourself
 

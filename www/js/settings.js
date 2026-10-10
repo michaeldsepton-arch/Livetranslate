@@ -8,6 +8,8 @@ export const DEFAULT_SETTINGS = {
   delay: "balanced", // quick | balanced | smooth
   termStyle: "keep", // keep | english
   honorifics: "short", // short | full
+  dialect: "saudi", // fusha | saudi | other
+  backgroundListening: true, // keep listening with the screen off / another app in front
   lectureLang: "auto", // auto (Arabic + English interpreter) | ar (Arabic only)
   showArabic: false,
   textSize: 1,
