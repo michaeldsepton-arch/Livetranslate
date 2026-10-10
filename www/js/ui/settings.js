@@ -91,7 +91,7 @@ export function buildSettings(app, screen) {
   showSens();
 
   const delayNote = h("div", { class: "seg-note" });
-  const showDelay = (k) => (delayNote.textContent = `${DELAY_PRESETS[k].approx}. ` + { quick: "Fastest. Shows each phrase almost at once; a little less context.", balanced: "Waits a few seconds for the next phrase so sentences flow naturally.", smooth: "Most polished: waits longest to see the whole thought. Best for complex talks." }[k]);
+  const showDelay = (k) => (delayNote.textContent = `${DELAY_PRESETS[k].approx}. ` + { quick: "Fastest, with a little less context. Uses your free daily allowance faster.", balanced: "Waits a few seconds for the next phrase so sentences flow naturally.", smooth: "Most polished: waits longest to see the whole thought. Best for complex talks." }[k]);
   showDelay(s.delay);
 
   const textSize = h("input", { type: "range", min: "0.8", max: "1.6", step: "0.05", value: String(s.textSize), "aria-label": "Text size" });

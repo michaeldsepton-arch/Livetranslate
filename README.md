@@ -1,0 +1,128 @@
+# Live Translate
+
+<img src="assets-src/icon-1024.png" width="96" align="right" alt="Live Translate icon">
+
+**A free Android app that translates an Arabic lecture into smooth, steady English as it happens.**
+Press the microphone, put the phone near the speaker, read along. Everything is saved as a transcript (`.txt`).
+
+Built because the usual translators flip-flop between versions of a sentence, mangle Islamic terms and names,
+and get confused when an English interpreter starts speaking.
+
+## What it does
+
+| You asked for | How it is done |
+|---|---|
+| **Press a mic button, nothing else** | One big button starts and stops. The lecture is auto-saved while recording, so nothing is lost if the phone dies. |
+| **A few seconds behind, so it has context — no choppy, changing text** | Each sentence is held briefly so the translator can see the *next* sentence too, then shown **once and never rewritten**. Three presets: Quick (~6 s behind), Balanced (~10 s, default), Smooth (~15 s). |
+| **Understands Islamic terms and names** | Whisper large-v3 for the Arabic, primed with a religious-lecture vocabulary. A built-in glossary of **~500** terms, prophets, Companions, scholars, places, books and all 114 surahs is handed to the translator whenever it appears. You can add your own names in *Settings → My names & terms*, and describe the lecture ("Seerah class by Shaykh X") for extra context. |
+| **A continuous script for the whole lecture** | Sentences flow into paragraphs with timestamps; the screen follows the lecture, and you can scroll back without losing your place. |
+| **An English interpreter speaks too** | Every audio chunk is language-detected. English is shown as **Interpreter** text (italic, gold bar) and is never re-translated; Arabic is translated. The interpreter's words are also given to the translator as context for the next Arabic passage. |
+| **Save the transcript as a text file** | When you stop, a `.txt` is written to **Downloads/LiveTranslate** (and kept in the in-app **Library**). Share, copy, rename or re-export any lecture later. |
+| **Free** | Uses the free tiers of Groq (Whisper + an open LLM) and, optionally, Google Gemini as a backup. No subscription, no card. |
+| **Nice design from the logo** | Navy / gold / cream palette taken from the logo; Amiri for Arabic, Literata for reading, dark and light themes. |
+
+## Install the app (about 2 minutes)
+
+1. **Get the APK.** On your phone open the repo's **Releases** page and download `LiveTranslate.apk` from
+   **“Live Translate — latest build”**. (Every push builds it automatically with GitHub Actions; you can also grab it from the
+   *Actions* tab → latest run → *Artifacts*.)
+2. Open the downloaded file. Android will ask to allow **Install unknown apps** for your browser/Files app — allow it once.
+3. Open **Live Translate**. Allow the microphone.
+4. Tap **Set up free key** and follow the 3 steps (see below).
+5. Press the microphone. 🎙️
+
+Updates install straight over the old version and keep your keys and saved lectures.
+
+### Getting the free key (one minute, no card)
+
+1. Go to <https://console.groq.com/keys> and sign in with Google or e-mail.
+2. **Create API key**, copy it.
+3. Paste it into the app. Done.
+
+*Optional backup:* a free Google Gemini key from <https://aistudio.google.com/apikey> in *Settings → Connection*. If Groq's free
+daily allowance runs out mid-lecture, the app switches over by itself.
+
+> **Why a key at all?** Good Arabic speech recognition and translation need a large model, far too big to run on a phone. The key
+> is your own free account on a service that runs it for you. Audio goes **directly from your phone to Groq/Google** — there is no
+> server of ours in between, and the key never leaves your phone.
+
+## Using it well in a lecture
+
+* Put the phone **near the speaker or the PA speaker**, screen up. The screen stays awake while recording; plug in if it's a long one.
+* Leave **Noise suppression** and **Automatic volume** on. If quiet speech is missed raise *Sensitivity*; if it hears chatter lower it.
+* Fill in **This lecture** in Settings (speaker, topic, names you expect). It makes a noticeable difference to spelling and meaning.
+* Use **Pause** for breaks (the lecture continues in the same transcript); **stop** (the red button) to finish and save.
+* No interpreter? Set *Who is speaking?* to **Arabic only** — slightly more accurate.
+* Try **Try a demo lecture** on the home screen to see exactly how it looks, no key needed.
+
+## How it works (for the curious)
+
+```
+ mic ─► resample 16 kHz ─► speech-aware chunker ─► Whisper large-v3 (Groq) ─► clean-up
+        │ cuts at pauses, or at the quietest moment (never mid-word)         │ drops "subtitles by…" phantom text,
+        │                                                                     │ repeated loops, echoes of the prompt
+        ▼                                                                     ▼
+   English?  ──► shown as Interpreter                          Arabic ─► wait ≤ N s for the next sentence
+                                                                        ─► LLM translates with: glossary hits, the English already on
+                                                                           screen, previous + next Arabic, your lecture context
+                                                                        ─► committed once, fades in, never changes
+```
+
+* **Failover.** Every model has its own free allowance. The router tries Whisper large-v3 → large-v3-turbo → Gemini, and the best
+  available LLMs in order. A daily limit on one just moves to the next; a per-minute limit waits and retries; a rejected key is reported.
+* **Models are discovered at start-up** (`/models`), so retired models never break the app. You can override them under *Advanced*.
+* **Crash-proof.** The transcript is auto-saved a moment after every sentence; an interrupted lecture is recovered on next launch.
+* Everything above the Android layer is plain HTML/CSS/JS (no bundler) wrapped with [Capacitor](https://capacitorjs.com).
+
+### Free-tier reality check
+
+Free allowances are set by Groq/Google and change from time to time. At the time of writing Groq's free tier gives roughly 2 hours of
+speech-to-text per hour and ~8 hours per day, plus a daily token budget for the translator per model. A typical 1-hour lecture fits;
+back-to-back all-day sessions may switch to the backup key, or wait for the daily reset. The app tells you when a limit is hit.
+
+## Honest limitations
+
+* **Needs internet** during the lecture (mobile data is fine: ~2 MB per minute of speech).
+* **Not simultaneous-interpreter perfect.** It is machine translation: heavy dialect, a very distant microphone, an echoing hall or
+  several people talking at once reduce accuracy. Qur'anic verses and hadith are translated by meaning — check important quotes against
+  reliable sources.
+* **No speaker names.** It separates *Arabic* from *English* (sheikh vs interpreter) but doesn't tell two Arabic speakers apart.
+* While the screen is off, Android may stop the microphone. Keep the app open (it keeps the screen on for you).
+* Android 8+ only; Android 10+ writes the `.txt` straight to Downloads (older versions open the Share sheet instead).
+
+## Build it yourself
+
+Everything builds in the cloud with GitHub Actions (`.github/workflows/build-apk.yml`) — no Android Studio needed. Push → tests → signed APK → Release.
+
+Locally:
+
+```bash
+npm install
+npm test                 # 58 unit tests: chunker, glossary, filters, router failover, engine behaviour…
+npm run serve            # try the web version at http://localhost:8080 (Chrome; microphone works on localhost)
+npm run icons            # regenerate icons/splash from assets-src/logo-options.png
+npx cap sync android && cd android && ./gradlew assembleRelease   # needs JDK 21 + Android SDK
+```
+
+**Signing key.** The repo includes a throw-away key (`android/app/sideload.keystore`) purely so every CI build is signed identically and
+updates install over each other. For anything you distribute, create your own and add the GitHub secrets `LT_KEYSTORE_B64`
+(`base64 -w0 my.keystore`), `LT_KEYSTORE_PASSWORD`, `LT_KEY_ALIAS`, `LT_KEY_PASSWORD`.
+
+### Project layout
+
+```
+www/                     the app (served as-is, no build step)
+  js/engine/             chunk → transcript → translation pipeline, glossary, filters, router, export
+  js/providers/          Groq + Gemini clients, model selection
+  js/audio/              mic capture, resampler, speech chunker, WAV encoder
+  js/ui/                 live screen, library/reader, settings, sheets
+android/                 Capacitor Android project + small native plugin (save to Downloads, keep awake)
+tests/                   node --test unit tests
+scripts/                 icon generator, dev server
+assets-src/              logo source sheet + master icon
+```
+
+## Credits & licences
+
+App code: MIT. Fonts: Inter, Literata, Amiri (SIL OFL, licences in `www/fonts/`). Icons: Feather (MIT). Speech: OpenAI Whisper,
+served by Groq. Translation: open large language models served by Groq / Google Gemini.

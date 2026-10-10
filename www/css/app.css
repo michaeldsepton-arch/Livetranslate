@@ -200,6 +200,9 @@ svg.i.fill { fill: currentColor; stroke: none; }
 @keyframes halo { from { transform: scale(1); opacity: 0.7; } to { transform: scale(1.7); opacity: 0; } }
 .mic.busy { opacity: 0.7; pointer-events: none; }
 
+body.typing .dock, body.typing .strip { display: none; }
+body.typing .scroll { padding-bottom: 24px; }
+
 /* ---------- empty state ---------- */
 .empty { position: relative; padding: 18px 26px 10px; text-align: center; max-width: 520px; margin: 0 auto; }
 .empty .logo { width: 150px; height: 118px; object-fit: contain; margin: 14px auto 6px; display: block; filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.3)); }
@@ -294,3 +297,11 @@ details.adv { margin-top: 6px; } details.adv summary { cursor: pointer; font-siz
 
 @media (min-width: 700px) { .block .en { font-size: calc(20px * var(--text-scale)); } }
 @media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; } }
+
+/* the logo's cream swoosh needs a dark ground: seat it on a navy tile in the light theme */
+:root[data-theme="light"] .brand img,
+:root[data-theme="light"] .empty .logo,
+:root[data-theme="light"] .about img {
+  box-sizing: content-box; background: linear-gradient(145deg, #1e4658, #143b4b); border-radius: 14px; padding: 6px 7px;
+}
+:root[data-theme="light"] .empty .logo { border-radius: 26px; padding: 18px 22px; }

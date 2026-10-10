@@ -118,9 +118,18 @@ export class LectureEngine extends Emitter {
       const prompt = buildWhisperPrompt({ userTerms: this.userTerms, tail: this.arTail });
       const call = (lang) => (item) => this.router.providers[item.provider].transcribe(wav, { model: item.model, language: lang, prompt, signal: this.abort.signal });
       let { value: res } = await this.router.run("stt", call(language), { signal: this.abort.signal });
-      // Whisper sometimes calls Arabic speech Persian/Urdu: same script, wrong words. Re-run as Arabic.
-      if (!language && ARABIC_LOOKALIKES.has(langCode(res.language)) && scriptLang(res.text) === "ar") {
-        ({ value: res } = await this.router.run("stt", call("ar"), { signal: this.abort.signal }));
+      if (!language) {
+        const said = langCode(res.language);
+        const script = scriptLang(res.text);
+        let again = null;
+        if (ARABIC_LOOKALIKES.has(said) && script === "ar") again = "ar"; // Arabic speech labelled Persian/Urdu: same script, wrong words
+        else if (said === "ar" && script === "en") again = "ar"; // it "translated" instead of transcribing
+        else if (said === "en" && script === "ar") again = "en"; // English speech written out in Arabic letters
+        if (again) {
+          // for English, drop the Arabic primer so it cannot pull the output back into Arabic script
+          const retry = (item) => this.router.providers[item.provider].transcribe(wav, { model: item.model, language: again, prompt: again === "en" ? "" : prompt, signal: this.abort.signal });
+          ({ value: res } = await this.router.run("stt", retry, { signal: this.abort.signal }));
+        }
       }
       return res;
     } finally {

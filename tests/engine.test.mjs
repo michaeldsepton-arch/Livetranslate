@@ -213,3 +213,28 @@ test("snapshot contains only usable, serialisable entries", async () => {
   assert.ok(!("sttDoneAt" in snap[0]));
   JSON.stringify(snap);
 });
+
+test("a recogniser that writes English speech in Arabic letters (or translates Arabic) is re-run with the language forced", async () => {
+  const calls = [];
+  const { engine } = setup({
+    stt: (_w, o, call) => {
+      calls.push({ language: o.language, prompt: o.prompt });
+      if (call === 1) return { text: "جود ايفنينغ ايفريوان", language: "english", segments: [] }; // English labelled, Arabic letters
+      if (call === 2) return { text: EN1, language: "english", segments: [] };
+      if (call === 3) return { text: "Praise be to Allah", language: "arabic", segments: [] }; // Arabic audio, English text
+      return { text: AR1, language: "arabic", segments: [] };
+    },
+    chat: () => "ok",
+  });
+  engine.ingestChunk(chunk(0));
+  await settled(engine);
+  engine.ingestChunk(chunk(1));
+  await settled(engine);
+  assert.deepEqual(calls.slice(0, 2).map((c) => c.language), [undefined, "en"]);
+  assert.equal(calls[1].prompt, "", "no Arabic primer when forcing English");
+  assert.equal(engine.entries[0].kind, "interpreter");
+  assert.equal(engine.entries[0].en, EN1);
+  assert.deepEqual(calls.slice(2).map((c) => c.language), [undefined, "ar"]);
+  assert.equal(engine.entries[1].kind, "lecture");
+  assert.equal(engine.entries[1].ar, AR1);
+});
