@@ -20,7 +20,7 @@ and get confused when an English interpreter starts speaking.
 | **A continuous script for the whole lecture** | Sentences flow into paragraphs with timestamps; the screen follows the lecture, and you can scroll back without losing your place. |
 | **An English interpreter speaks too** | Every audio chunk is language-detected. English is shown as **Interpreter** text (italic, gold bar) and is never re-translated; Arabic is translated. The interpreter's words are also given to the translator as context for the next Arabic passage. |
 | **Save the transcript as a text file** | When you stop, a `.txt` is written to **Downloads/Lisan** (and kept in the in-app **Library**). Share, copy, rename, re-export or delete any lecture later (delete has an Undo; long-press to select several). |
-| **Free** | Uses the free tiers of Groq (Whisper + an open LLM) and, optionally, Google Gemini as a backup. No subscription, no card. |
+| **Free** | Uses the free tiers of Groq (Whisper + an open LLM) and, optionally, Google Gemini. No subscription, no card. You choose the engine for hearing (Whisper large-v3, Whisper **turbo**, or **Gemini**) and for translating (Groq or Gemini) separately in *Settings → Connection*, and the **Speech test** lets you compare them on the same clip. |
 | **Qur'an recitation** | Recited verses are recognised against the full text of the Qur'an: the exact Arabic (with diacritics) replaces any mis-heard words, the surah and verse are tagged (e.g. *Al-Masad 111:2–5*), and the translator is told it is translating the Qur'an so it gives the true meaning. Works for verses quoted inside a lecture too. Can be switched off in Settings. |
 | **Know your free limits** | *Settings → Free allowance* (and a chip while recording) shows, per model, how much of the free Groq / Gemini allowance this phone has used — speech minutes this hour and today, requests, tokens — with a warning at 80 % and 95 %, an estimate of how long it will last at your current pace, and links to the official usage pages. It also paces requests so short chunks don't hit the per-minute limit. |
 | **Only words are transliterated** | Single Islamic terms and names stay as words (taqwa, salah, hadith…) plus a few short expressions (Alhamdulillah, InshaAllah…). Sentences, verses and supplications are always translated; if the translator ever transliterates a sentence it is asked again. |
@@ -60,6 +60,10 @@ daily allowance runs out mid-lecture, the app switches over by itself.
 * Screen off is optional: press the power button and Lisan keeps listening (notification shown). Screen on is still best — you can read along.
 * Use **Pause** for breaks (the lecture continues in the same transcript). The red **stop** button asks: *Stop and save*, *Keep recording*, or *Delete, don't save* (tap twice, nothing is kept).
 * No interpreter? Set *Who is speaking?* to **Arabic only** — slightly more accurate.
+* **If the result isn't good, run the Speech test** (*Settings → Speech test*). It records 8 seconds the same way a lecture does, plays it
+  back (so you hear exactly what Lisan hears), and shows what Whisper large-v3, large-v3 *without* the vocabulary hint, Whisper turbo and Gemini
+  each make of that clip, with the English each would give. Quiet, clipped or echoey audio shows up in the level read-out; if every engine
+  is poor the audio is the problem (move closer, try turning Noise suppression off), and if only one is, switch the engine in *Connection*.
 * Try **Try a demo lecture** on the home screen to see exactly how it looks, no key needed.
 
 ## How it works (for the curious)
@@ -75,8 +79,9 @@ daily allowance runs out mid-lecture, the app switches over by itself.
                                                                         ─► committed once, fades in, never changes
 ```
 
-* **Failover.** Every model has its own free allowance. The router tries Whisper large-v3 → large-v3-turbo → Gemini, and the best
-  available LLMs in order. A daily limit on one just moves to the next; a per-minute limit waits and retries; a rejected key is reported.
+* **Failover.** Every model has its own free allowance. By default the router tries Whisper large-v3 → large-v3-turbo → Gemini, and the best
+  available LLMs in order; *Settings → Connection* lets you put turbo or Gemini first for speech and Groq or Gemini first for translation.
+  A daily limit on one just moves to the next; a per-minute limit waits and retries; a rejected key is reported.
 * **Models are discovered at start-up** (`/models`), so retired models never break the app. You can override them under *Advanced*.
 * **Crash-proof.** The transcript is auto-saved a moment after every sentence; an interrupted lecture is recovered on next launch.
 * Everything above the Android layer is plain HTML/CSS/JS (no bundler) wrapped with [Capacitor](https://capacitorjs.com).
@@ -130,7 +135,7 @@ Locally:
 
 ```bash
 npm install
-npm test                 # 58 unit tests: chunker, glossary, filters, router failover, engine behaviour…
+npm test                 # unit tests: chunker, glossary, filters, router failover, engine behaviour…
 npm run serve            # try the web version at http://localhost:8080 (Chrome; microphone works on localhost)
 npm run icons            # regenerate icons/splash from assets-src/logo-options.png
 npx cap sync android && cd android && ./gradlew assembleRelease   # needs JDK 21 + Android SDK

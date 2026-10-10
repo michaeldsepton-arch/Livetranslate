@@ -9,6 +9,7 @@ import { MicCapture } from "../audio/capture.js";
 import { Chunker } from "../audio/chunker.js";
 import { toast } from "./overlay.js";
 import { usagePanel, officialLinks } from "./usage.js";
+import { speechTest } from "./speech-test.js";
 import { APP_VERSION } from "../version.js";
 
 function keyField(app, { provider, label, field, placeholder, link, linkText, hint }) {
@@ -83,6 +84,21 @@ function micTest(app) {
   return h("div", { class: "field" }, h("div", {}, btn), meter, status);
 }
 
+/** Which service handles a stage first.  A missing key just falls through to the other service. */
+function enginePicker(app, { label, field, options, notes }) {
+  const note = h("div", { class: "seg-note" });
+  const show = (v) => {
+    const s = app.settings;
+    const need = v === "gemini" && !s.geminiKey.trim() ? " Add a Gemini key above to use it." : v !== "gemini" && v !== "auto" && !s.groqKey.trim() ? " Add a Groq key above to use it." : "";
+    note.textContent = (notes[v] || "") + need;
+  };
+  show(app.settings[field]);
+  app.on("settings", (p) => ("geminiKey" in p || "groqKey" in p) && show(app.settings[field]));
+  return h("div", { class: "field" }, h("label", {}, label),
+    segmented(options, app.settings[field], (v) => { app.update({ [field]: v }); show(v); }),
+    note);
+}
+
 export function buildSettings(app, screen) {
   const s = app.settings;
   const usageEl = usagePanel(app);
@@ -118,7 +134,33 @@ export function buildSettings(app, screen) {
           h("h3", {}, icon("key"), "Connection"),
           h("p", { class: "hint" }, "Free keys, stored only on this phone. One is enough; a second one acts as a backup if the first runs out for the day."),
           keyField(app, { provider: "groq", label: "Groq key — speech recognition + translation", field: "groqKey", placeholder: "gsk_…", link: GROQ_KEYS_URL, linkText: "Get a free key →", hint: "Recommended. Runs Whisper large-v3." }),
-          keyField(app, { provider: "gemini", label: "Google Gemini key — optional backup", field: "geminiKey", placeholder: "AIza…", link: GEMINI_KEYS_URL, linkText: "Get a free key →", hint: "Takes over automatically if Groq's free allowance is used up." })),
+          keyField(app, { provider: "gemini", label: "Google Gemini key — optional backup", field: "geminiKey", placeholder: "AIza…", link: GEMINI_KEYS_URL, linkText: "Get a free key →", hint: "Takes over automatically if Groq's free allowance is used up." }),
+          enginePicker(app, {
+            label: "Speech recognition (hearing the Arabic)",
+            field: "sttEngine",
+            options: [["auto", "Auto"], ["groq", "Whisper"], ["groq-turbo", "Turbo"], ["gemini", "Gemini"]],
+            notes: {
+              auto: "Whisper large-v3 first (the most accurate), then Turbo, then Gemini if the free allowance runs out.",
+              groq: "Whisper large-v3 on Groq, then the others if it runs out.",
+              "groq-turbo": "Whisper large-v3 turbo first: about twice as fast and a bit less accurate on difficult Arabic. Falls back to the others if its allowance runs out.",
+              gemini: "Google's model listens to the audio directly. Needs the Gemini key.",
+            },
+          }),
+          enginePicker(app, {
+            label: "Translation (Arabic → English)",
+            field: "llmEngine",
+            options: [["auto", "Auto"], ["groq", "Groq"], ["gemini", "Gemini"]],
+            notes: {
+              auto: "Groq's open models first, then Gemini if the free allowance runs out.",
+              groq: "Groq's open models first (gpt-oss-120b…), then Gemini if they run out.",
+              gemini: "Gemini first, then Groq if it runs out. Needs the Gemini key.",
+            },
+          })),
+
+        h("section", { class: "card" },
+          h("h3", {}, icon("headphones"), "Speech test"),
+          h("p", { class: "hint" }, "Not happy with the results? Record a few seconds of the lecture (or play a recording near the phone). Lisan plays it back so you can hear exactly what it hears, then shows what each speech engine makes of the same clip, so you can tell whether the problem is the microphone, an engine, or the setting. Uses a little of your free allowance."),
+          speechTest(app)),
 
         h("section", { class: "card" },
           h("h3", {}, icon("spark"), "This lecture"),
@@ -183,7 +225,6 @@ export function buildSettings(app, screen) {
         h("section", { class: "card" },
           h("details", { class: "adv" },
             h("summary", {}, "Advanced"),
-            toggleRow("Use Gemini first", "Only matters if both keys are set", s.preferGemini, (v) => app.update({ preferGemini: v })),
             adv("Speech model override (Groq)", "modelStt", "whisper-large-v3"),
             adv("Translation model override (Groq)", "modelLlm", "openai/gpt-oss-120b"),
             adv("Gemini model override", "modelGemini", "gemini-2.5-flash"))),

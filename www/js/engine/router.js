@@ -10,10 +10,13 @@ export class Router {
    * @param {{groq?:object, gemini?:object}} providers   keyed providers (absent = no key)
    * @param {{preferGemini?:boolean, models?:object}} opts
    */
-  constructor(providers, { preferGemini = false, overrides = {}, now = Date.now, sleep = defaultSleep, onNotice = () => {}, usage = null } = {}) {
+  constructor(providers, { preferGemini = false, engines = {}, overrides = {}, now = Date.now, sleep = defaultSleep, onNotice = () => {}, usage = null } = {}) {
     this.providers = providers;
     this.usage = usage; // optional UsageTracker: lets us pace requests under each model's per-minute limit
     this.preferGemini = preferGemini;
+    // which engine to try first, per stage: speech ("stt") and translation ("llm").
+    // stt: auto | groq | groq-turbo | gemini     llm: auto | groq | gemini.   A missing key simply falls through to the other.
+    this.engines = { stt: engines.stt || "auto", llm: engines.llm || "auto" };
     this.overrides = overrides; // {stt, llm, gemini}: user-typed model ids (advanced)
     this.now = now;
     this.sleep = sleep;
@@ -64,11 +67,15 @@ export class Router {
   }
 
   chain(kind) {
-    const order = this.preferGemini ? ["gemini", "groq"] : ["groq", "gemini"];
+    const pref = this.engines[kind] || "auto";
+    const geminiFirst = pref === "gemini" || (pref === "auto" && this.preferGemini);
+    const order = geminiFirst ? ["gemini", "groq"] : ["groq", "gemini"];
     const items = [];
     for (const p of order) {
       if (!this.providers[p] || this.dead.has(p)) continue;
-      for (const model of this.models[p][kind]) {
+      let models = this.models[p][kind];
+      if (p === "groq" && kind === "stt" && pref === "groq-turbo") models = [...models].sort((a, b) => Number(/turbo/.test(b)) - Number(/turbo/.test(a)));
+      for (const model of models) {
         const id = `${p}:${model}`;
         if (!this.bad.has(id)) items.push({ provider: p, model, id });
       }

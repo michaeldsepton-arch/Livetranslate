@@ -12,7 +12,8 @@ const L = "groq:openai/gpt-oss-120b";
 test("known free limits", () => {
   assert.deepEqual(limitsFor(W), { rpm: 20, rpd: 2000, ash: 7200, asd: 28800 });
   assert.equal(limitsFor(L).tpd, 200000);
-  assert.deepEqual(limitsFor("gemini:gemini-2.5-flash"), {});
+  assert.deepEqual(limitsFor("gemini:gemini-2.5-flash"), { rpm: 10 });
+  assert.deepEqual(limitsFor("gemini:gemini-2.5-flash-lite"), { rpm: 15 });
   assert.equal(MIN_BILLED_AUDIO_SEC, 10);
 });
 
@@ -88,7 +89,7 @@ test("pace: waits only when a model is near its per-minute limit", () => {
   assert.ok(wait > 0 && wait <= 60100, `wait ${wait}`);
   clock.t += 61000;
   assert.equal(u.pace(W), 0);
-  assert.equal(u.pace("gemini:gemini-2.5-flash"), 0, "no pacing without a known limit");
+  assert.equal(u.pace("gemini:made-up"), 0, "unknown providers are not paced");
 });
 
 test("minutes of speech left at the current pace", () => {

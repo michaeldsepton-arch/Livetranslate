@@ -58,7 +58,7 @@ export class App extends Emitter {
   }
 
   update(patch) {
-    const keysChanged = "groqKey" in patch || "geminiKey" in patch || "preferGemini" in patch || "modelStt" in patch || "modelLlm" in patch || "modelGemini" in patch;
+    const keysChanged = "groqKey" in patch || "geminiKey" in patch || "preferGemini" in patch || "sttEngine" in patch || "llmEngine" in patch || "modelStt" in patch || "modelLlm" in patch || "modelGemini" in patch;
     Object.assign(this.settings, patch);
     saveSettings(this.settings);
     if ("groqPaid" in patch || "geminiPaid" in patch) this._syncPlan();
@@ -82,6 +82,7 @@ export class App extends Emitter {
     if (s.geminiKey.trim()) providers.gemini = new GeminiProvider(s.geminiKey);
     return new Router(providers, {
       preferGemini: s.preferGemini && !!providers.gemini,
+      engines: { stt: s.sttEngine, llm: s.llmEngine },
       overrides: { stt: s.modelStt.trim(), llm: s.modelLlm.trim(), gemini: s.modelGemini.trim() },
       onNotice: (n) => this._notice(n),
       usage: this.usage,

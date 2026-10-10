@@ -3,7 +3,9 @@
 export const DEFAULT_SETTINGS = {
   groqKey: "",
   geminiKey: "",
-  preferGemini: false,
+  preferGemini: false, // legacy: kept so older saved settings still work
+  sttEngine: "auto", // auto | groq | groq-turbo | gemini   (speech recognition)
+  llmEngine: "auto", // auto | groq | gemini            (translation)
   context: "", // "Shaykh X — Seerah series. Names: …"
   delay: "balanced", // quick | balanced | smooth
   termStyle: "keep", // keep | english
@@ -42,7 +44,12 @@ const KEY = "lt.settings.v1";
 export function loadSettings(storage = globalThis.localStorage) {
   try {
     const raw = storage && storage.getItem(KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    if (raw) {
+      const saved = JSON.parse(raw);
+      // older versions had one "use Gemini first" switch for both stages
+      if (saved.preferGemini && saved.sttEngine === undefined && saved.llmEngine === undefined) saved.sttEngine = saved.llmEngine = "gemini", saved.preferGemini = false;
+      return { ...DEFAULT_SETTINGS, ...saved };
+    }
   } catch {}
   return { ...DEFAULT_SETTINGS };
 }

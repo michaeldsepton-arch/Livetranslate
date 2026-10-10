@@ -9,7 +9,10 @@ const TABLE = [
   { re: /^groq:whisper-/, role: "Speech", limits: { rpm: 20, rpd: 2000, ash: 7200, asd: 28800 } },
   { re: /^groq:openai\/gpt-oss/, role: "Translation", limits: { rpm: 30, rpd: 1000, tpm: 8000, tpd: 200000 } },
   { re: /^groq:/, role: "Translation", limits: { rpm: 30 } },
-  { re: /^gemini:/, role: "Gemini", limits: {} }, // varies by model and account: see Google AI Studio
+  // Gemini free limits vary by model and account (see Google AI Studio). Only a cautious per-minute pace is assumed,
+  // so requests spread across Gemini models instead of tripping the cap; no usage bars are drawn for it.
+  { re: /^gemini:.*flash-lite/, role: "Gemini", limits: { rpm: 15 } },
+  { re: /^gemini:/, role: "Gemini", limits: { rpm: 10 } },
 ];
 
 export function limitsFor(id) {
