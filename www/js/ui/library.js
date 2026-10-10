@@ -3,18 +3,49 @@ import { h, fmtDate, fmtDuration, wordCount } from "../util.js";
 import { icon } from "./icons.js";
 import { TranscriptView } from "./transcript-view.js";
 import { viewToolbar, backButton } from "./common.js";
-import { openSheet, confirmSheet, toast } from "./overlay.js";
+import { openSheet, toast } from "./overlay.js";
+import { deleteLectures } from "./lecture-actions.js";
 import { suggestFilename } from "../engine/transcript.js";
 
 export function buildLibrary(app, screen) {
   const list = h("div", { class: "list" });
-  screen.append(
-    h("header", { class: "bar title-bar" }, backButton(() => app.go("live"), "Back to live"), h("h2", {}, "Library")),
-    h("div", { class: "scroll" }, list)
-  );
+  const title = h("h2", {}, "Library");
+  const back = h("button", { class: "icon-btn" });
+  const actions = h("div", { class: "bar-actions" });
+  let sessions = [];
+  let selecting = false;
+  const selected = new Set();
 
-  async function refresh() {
-    const sessions = (await app.store.list().catch(() => [])).filter((s) => !s.active || s.entries.length);
+  screen.append(h("header", { class: "bar title-bar" }, back, title, actions), h("div", { class: "scroll" }, list));
+
+  const exitSelect = () => {
+    selecting = false;
+    selected.clear();
+    draw();
+  };
+  const toggle = (id) => {
+    selected.has(id) ? selected.delete(id) : selected.add(id);
+    draw();
+  };
+  const removeSelected = () => deleteLectures(app, sessions.filter((x) => selected.has(x.id)), { onChange: refresh }).then((done) => done && exitSelect());
+
+  function drawHeader() {
+    title.textContent = selecting ? `${selected.size} selected` : "Library";
+    back.replaceChildren(icon(selecting ? "x" : "back"));
+    back.setAttribute("aria-label", selecting ? "Cancel selection" : "Back to live");
+    back.onclick = selecting ? exitSelect : () => app.go("live");
+    if (selecting) {
+      actions.replaceChildren(
+        h("button", { class: "btn small", onclick: () => { sessions.forEach((x) => selected.add(x.id)); draw(); } }, "All"),
+        h("button", { class: "btn small danger", disabled: selected.size ? null : true, onclick: removeSelected }, icon("trash"), "Delete")
+      );
+    } else {
+      actions.replaceChildren(sessions.length ? h("button", { class: "btn small", onclick: () => { selecting = true; draw(); } }, "Select") : null);
+    }
+  }
+
+  function draw() {
+    drawHeader();
     list.replaceChildren();
     if (!sessions.length) {
       list.append(
@@ -28,18 +59,45 @@ export function buildLibrary(app, screen) {
     for (const s of sessions) {
       const first = (s.entries || []).find((e) => e.en);
       const words = (s.entries || []).reduce((n, e) => n + wordCount(e.en), 0);
+      const isSel = selected.has(s.id);
+
+      // long-press a lecture to start selecting several
+      let timer = null, pressed = false;
+      const arm = () => { pressed = false; timer = setTimeout(() => { pressed = true; selecting = true; selected.add(s.id); draw(); navigator.vibrate && navigator.vibrate(12); }, 520); };
+      const disarm = () => clearTimeout(timer);
+
+      const main = h("button", {
+        class: "lib-main",
+        onclick: () => (pressed ? (pressed = false) : selecting ? toggle(s.id) : app.go("reader", { id: s.id })),
+        ontouchstart: arm, ontouchend: disarm, ontouchmove: disarm, ontouchcancel: disarm,
+        oncontextmenu: (e) => e.preventDefault(),
+      },
+        h("h4", {}, s.title),
+        h("p", { class: "snippet" }, first ? first.en : "—"),
+        h("div", { class: "chips" },
+          h("span", { class: "mini gold" }, fmtDate(s.startedAt, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })),
+          h("span", { class: "mini" }, fmtDuration(s.durationSec)),
+          h("span", { class: "mini" }, `${words.toLocaleString()} words`)));
+
       list.append(
-        h("button", { class: "lib-item", onclick: () => app.go("reader", { id: s.id }) },
-          h("h4", {}, h("span", {}, s.title), icon("chevron")),
-          h("p", { class: "snippet" }, first ? first.en : "—"),
-          h("div", { class: "chips" },
-            h("span", { class: "mini gold" }, fmtDate(s.startedAt, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })),
-            h("span", { class: "mini" }, fmtDuration(s.durationSec)),
-            h("span", { class: "mini" }, `${words.toLocaleString()} words`)))
+        h("div", { class: "lib-item" + (isSel ? " sel" : "") },
+          selecting ? h("span", { class: "lib-check" + (isSel ? " on" : ""), onclick: () => toggle(s.id) }, isSel ? icon("check") : null) : null,
+          main,
+          selecting ? null : h("button", { class: "icon-btn lib-del", "aria-label": `Delete ${s.title}`, onclick: () => deleteLectures(app, [s], { onChange: refresh }) }, icon("trash")))
       );
     }
   }
-  app.on("nav", (n) => n.screen === "library" && refresh());
+
+  async function refresh() {
+    sessions = (await app.store.list().catch(() => [])).filter((x) => !x.active || x.entries.length);
+    for (const id of [...selected]) if (!sessions.some((x) => x.id === id)) selected.delete(id);
+    if (!sessions.length) selecting = false;
+    draw();
+  }
+  app.on("nav", (n) => {
+    if (n.screen === "library") refresh();
+    else if (selecting) exitSelect();
+  });
   refresh();
 }
 
@@ -76,11 +134,8 @@ export function buildReader(app, screen) {
         h("button", { class: "btn", onclick: () => app.exportShare(session) }, icon("share"), "Share"),
         h("button", { class: "btn", onclick: () => app.exportCopy(session) }, icon("copy"), "Copy"),
         h("button", { class: "btn danger", onclick: async () => {
-            const ok = await confirmSheet({ title: "Delete this lecture?", text: "The transcript will be removed from this phone. Files you already saved or shared are not affected.", confirm: "Delete", danger: true });
-            if (!ok) return;
-            await app.store.remove(session.id);
-            toast("Deleted");
-            app.go("library");
+            const done = await deleteLectures(app, [session], { onChange: () => app.nav === "library" && app.go("library") });
+            if (done) app.go("library");
           } }, icon("trash"), "Delete"))
     );
   }

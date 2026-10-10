@@ -61,3 +61,17 @@ test("session store: save, list newest first, recover an interrupted lecture", a
   await store.remove(a.id);
   assert.equal((await store.list()).length, 1);
 });
+
+test("undo after delete: a removed lecture can be put back unchanged", async () => {
+  const store = new SessionStore(new MemoryBackend());
+  const s = store.newSession({ title: "Keep me", startedAt: 5000 });
+  s.entries.push(E("1", 0, 1, "lecture", "ا", "Words."));
+  await store.save(s);
+  const copy = (await store.list())[0];
+  await store.remove(s.id);
+  assert.equal((await store.list()).length, 0);
+  await store.save(copy);
+  const back = (await store.list())[0];
+  assert.equal(back.title, "Keep me");
+  assert.equal(back.entries[0].en, "Words.");
+});
