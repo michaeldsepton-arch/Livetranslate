@@ -45,7 +45,7 @@ Updates install straight over the old version and keep your keys and saved lectu
 2. **Create API key**, copy it.
 3. Paste it into the app. Done.
 
-*Optional, paid:* an OpenAI key from <https://platform.openai.com/api-keys> (add credit under Billing; the minimum is $5, and leaving auto-recharge off means it can never spend more than you loaded). OpenAI has no free tier, but it has no daily wall either, so it suits long days of lectures. Roughly $0.3–1.5 per lecture hour depending on the models (the *Free allowance* screen shows a rough running cost).
+*Optional, paid:* an OpenAI key from <https://platform.openai.com/api-keys> (add credit under Billing; the minimum is $5, and leaving auto-recharge off means it can never spend more than you loaded). Create the key with **All** permissions: a *Read only* key can list models but cannot make requests, and the **Test** button in Settings makes one tiny real request to catch exactly that. OpenAI has no free tier, but it has no daily wall either, so it suits long days of lectures. Roughly $0.3–1.5 per lecture hour depending on the models (the *Free allowance* screen shows a rough running cost).
 
 *Optional backup:* a free Google Gemini key from <https://aistudio.google.com/apikey> in *Settings → Connection*. If Groq's free
 daily allowance runs out mid-lecture, the app switches over by itself.

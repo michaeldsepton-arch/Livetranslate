@@ -55,6 +55,9 @@ export function classifyHttp(provider, status, bodyText, headers) {
     if (m) retryAfterMs = parseDurationMs(m[1]);
   }
   const opts = { status, retryAfterMs, provider };
+  // a key that can list models but not make requests (OpenAI "Read only" / restricted keys)
+  if ((status === 401 || status === 403) && /insufficient permissions|missing scopes?/i.test(message + (bodyText || "")))
+    return new ApiError(`${label(provider)} key is not allowed to make requests (it looks like a "Read only" or restricted key). Create a new key with "All" permissions.`, { ...opts, kind: "auth" });
   // OpenAI: out of credit is a billing problem, not a speed limit; a model your project can't use is just skipped
   if (/insufficient_quota|exceeded your current quota/i.test(bodyText || "")) return new ApiError(`${label(provider)} credit has run out. Add credit in your ${label(provider)} billing page.`, { ...opts, kind: "quota", retryAfterMs: 30 * 60000 });
   if (status === 403 && /access to model|model_not_found/i.test(message + (bodyText || ""))) return new ApiError(`Model unavailable: ${message}`, { ...opts, kind: "model" });

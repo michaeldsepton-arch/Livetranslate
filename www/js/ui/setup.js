@@ -17,9 +17,16 @@ export async function testKey(provider, key) {
   try {
     const p = provider === "gemini" ? new GeminiProvider(k) : provider === "openai" ? new OpenAIProvider(k) : new GroqProvider(k);
     const models = await p.listModels();
+    if (provider === "openai") {
+      // listing models works even on "Read only" keys, so make one tiny real request (a fraction of a cent) to prove it can be used
+      const cheap = ["gpt-4.1-mini", "gpt-4o-mini", "gpt-4.1", "gpt-4o"].find((m) => models.includes(m)) || models.find((m) => /^gpt-/.test(m) && !/transcribe|tts|audio|realtime|image|search|embed|instruct|codex|preview/.test(m));
+      if (cheap) await p.chat({ model: cheap, system: "Reply with OK.", user: "OK", maxTokens: 16 });
+      return { ok: true, message: `Key works and can make requests · ${models.length} models available` };
+    }
     return { ok: true, message: `Key works · ${models.length} models available` };
   } catch (e) {
-    if (e.kind === "auth") return { ok: false, message: "That key was rejected — check you copied all of it" };
+    if (e.kind === "quota" && provider === "openai") return { ok: false, message: "The key is valid but the account has no credit — add credit on OpenAI's billing page" };
+    if (e.kind === "auth") return { ok: false, message: provider === "openai" && /permission|read only/i.test(e.message || "") ? e.message : "That key was rejected — check you copied all of it" };
     if (e.kind === "network") return { ok: false, message: "No internet connection" };
     return { ok: false, message: e.message || "Couldn't check the key" };
   }

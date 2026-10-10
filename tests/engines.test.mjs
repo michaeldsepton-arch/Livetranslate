@@ -218,3 +218,11 @@ test("speech test includes OpenAI's speech models when a key is set", () => {
   r.models.openai = { stt: ["gpt-4o-transcribe", "whisper-1", "gpt-4o-mini-transcribe"], llm: ["gpt-4.1"] };
   assert.deepEqual(sttCandidates(r).map((c) => c.key), ["large", "large-nohint", "turbo", "openai:gpt-4o-transcribe", "openai:whisper-1"]);
 });
+
+test("a Read-only OpenAI key is called out clearly", () => {
+  const body = JSON.stringify({ error: { message: "You have insufficient permissions for this operation. Missing scopes: model.request." } });
+  const e = classifyHttp("openai", 403, body, null);
+  assert.equal(e.kind, "auth");
+  assert.match(e.message, /Read only/);
+  assert.match(e.message, /"All" permissions/);
+});
