@@ -5,6 +5,10 @@ import { Router } from "../www/js/engine/router.js";
 import { ApiError } from "../www/js/engine/errors.js";
 import { DEFAULT_SETTINGS } from "../www/js/settings.js";
 import { fakeProvider, fakeRouter, until, wait } from "./helpers.mjs";
+import { readFileSync } from "node:fs";
+import { QuranIndex } from "../www/js/engine/quran.js";
+
+const QURAN = new QuranIndex(JSON.parse(readFileSync(new URL("../www/data/quran-ar.json", import.meta.url))));
 
 const AR1 = "بسم الله الرحمن الرحيم الحمد لله رب العالمين";
 const AR2 = "وصلى الله وسلم على نبينا محمد";
@@ -14,9 +18,9 @@ const EN1 = "Good evening everyone, the Sheikh began by praising Allah.";
 const chunk = (n = 0) => ({ pcm: new Float32Array(1600), startMs: n * 5000, endMs: n * 5000 + 4500, voicedMs: 4000 });
 const sttText = (map) => (_wav, _o, call) => ({ text: map[call - 1], language: /[a-z]/i.test(map[call - 1] || "") ? "english" : "arabic", segments: [] });
 
-function setup({ stt, chat, settings = {}, wait: lookahead = 0 }) {
+function setup({ stt, chat, settings = {}, wait: lookahead = 0, quran = null }) {
   const provider = fakeProvider({ transcribe: stt, chat });
-  const engine = new LectureEngine({ router: fakeRouter(provider), settings: { ...DEFAULT_SETTINGS, ...settings } });
+  const engine = new LectureEngine({ router: fakeRouter(provider), settings: { ...DEFAULT_SETTINGS, ...settings }, quran });
   engine.cfg = { ...engine.cfg, lookaheadWaitMs: lookahead };
   return { engine, provider };
 }
@@ -237,4 +241,71 @@ test("a recogniser that writes English speech in Arabic letters (or translates A
   assert.deepEqual(calls.slice(2).map((c) => c.language), [undefined, "ar"]);
   assert.equal(engine.entries[1].kind, "lecture");
   assert.equal(engine.entries[1].ar, AR1);
+});
+
+// ---- the failures seen on the phone (reciting Surah Al-Masad) --------------------------------------------
+const HEARD = "ما أغنى عنه معنه وما كسب، سيصلى نار ذات لهب، وَامْرَأَتُهُ حَمَّالَةَ الْحَطَابِ فِي جِيدِهَا";
+
+test("Arabic recitation labelled English and written in Latin letters is re-run as Arabic, repaired from the Qur'an, and translated as the Qur'an", async () => {
+  const calls = [];
+  const { engine, provider } = setup({
+    quran: QURAN,
+    stt: (_w, o, call) => {
+      calls.push(o.language);
+      return call === 1 ? { text: "Tabbat yada abin habin wa tabba", language: "english", segments: [] } : { text: HEARD, language: "arabic", segments: [] };
+    },
+    chat: () => "His wealth and what he earned will not benefit him. He will burn in a Fire of blazing flame.",
+  });
+  engine.ingestChunk(chunk(0));
+  await settled(engine);
+  assert.deepEqual(calls, [undefined, "ar"], "second pass is forced to Arabic");
+  const e = engine.entries[0];
+  assert.equal(e.kind, "lecture");
+  assert.equal(e.quran[0].label, "Al-Masad 111:2–5");
+  assert.ok(e.ar.includes("مَالُهُۥ"), "mis-heard word restored from the Mushaf");
+  assert.ok(!e.ar.includes("معنه"));
+  const prompt = provider.calls.chat[0].user;
+  assert.ok(prompt.includes("QUR'AN:") && prompt.includes("Al-Masad 111:2–5"), "translator is told it is the Qur'an");
+  assert.ok(provider.calls.chat[0].system.includes("RECOGNISE SCRIPTURE"));
+  assert.equal(engine.snapshot()[0].quran[0].label, "Al-Masad 111:2–5", "saved with the transcript");
+});
+
+test("transliterated Arabic that stays Latin after the re-run is dropped, not shown as 'English'", async () => {
+  const { engine, provider } = setup({ quran: QURAN, stt: () => ({ text: "abenumassada. Al Fatiha.", language: "english", segments: [] }), chat: () => "x" });
+  engine.ingestChunk(chunk(0));
+  await settled(engine);
+  assert.equal(engine.entries.length, 0);
+  assert.equal(provider.calls.chat.length, 0);
+});
+
+test("real English from the interpreter is still shown as the interpreter", async () => {
+  const { engine } = setup({ quran: QURAN, stt: () => ({ text: "Hello, how are you?", language: "english", segments: [] }), chat: () => "x" });
+  engine.ingestChunk(chunk(0));
+  await settled(engine);
+  assert.equal(engine.entries[0].kind, "interpreter");
+  assert.equal(engine.entries[0].en, "Hello, how are you?");
+});
+
+test("recitation continues across chunks, and the Whisper prompt carries the exact verse text forward", async () => {
+  const prompts = [];
+  const { engine } = setup({
+    quran: QURAN,
+    stt: (_w, o, call) => (prompts.push(o.prompt), { text: ["تبت يدا أبي لهب وتب ما أغنى عنه ماله وما كسب", "سيصلى نارا ذات لهب وامرأته حمالة الحطب"][call - 1], language: "arabic", segments: [] }),
+    chat: () => "ok",
+  });
+  engine.ingestChunk(chunk(0));
+  await settled(engine);
+  engine.ingestChunk(chunk(1));
+  await settled(engine);
+  assert.equal(engine.entries[0].quran[0].label, "Al-Masad 111:1–2");
+  assert.equal(engine.entries[1].quran[0].label, "Al-Masad 111:3–4");
+  assert.ok(prompts[1].includes("مَالُهُۥ"), "prompt for the next chunk uses the corrected, diacritised text");
+});
+
+test("with Qur'an recognition off, text is left exactly as heard", async () => {
+  const { engine } = setup({ quran: null, stt: () => ({ text: HEARD, language: "arabic", segments: [] }), chat: () => "ok" });
+  engine.ingestChunk(chunk(0));
+  await settled(engine);
+  assert.equal(engine.entries[0].quran, undefined);
+  assert.ok(engine.entries[0].ar.includes("معنه"));
 });

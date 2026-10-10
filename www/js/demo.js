@@ -9,6 +9,7 @@ export const DEMO_SCRIPT = [
   { kind: "interpreter", dur: 6, en: "Good evening everyone. The Sheikh began by praising Allah and sending blessings on the Prophet, and said that tonight's topic is sincerity." },
   { kind: "lecture", dur: 8, ar: "روى الإمام البخاري في صحيحه عن أمير المؤمنين عمر بن الخطاب رضي الله عنه قال: سمعت رسول الله صلى الله عليه وسلم يقول: إنما الأعمال بالنيات، وإنما لكل امرئ ما نوى.", en: "Imam al-Bukhari narrated in his Sahih, on the authority of the Commander of the Believers, Umar ibn al-Khattab (RA), who said: I heard the Messenger of Allah ﷺ say: “Deeds are only by intentions, and every person will have only what they intended.”" },
   { kind: "lecture", dur: 5, ar: "فالنية هي روح العمل، وبها تتميز العادة من العبادة، والطاعة من المعصية.", en: "For intention (niyyah) is the soul of every deed. By it, habit is distinguished from worship, and obedience from disobedience." },
+  { kind: "lecture", dur: 6, ar: "قُلۡ هُوَ ٱللَّهُ أَحَدٌ ٱللَّهُ ٱلصَّمَدُ", en: "Say, “He is Allah, [who is] One. Allah, the Eternal Refuge.”", quran: [{ label: "Al-Ikhlas 112:1–2" }] },
   { kind: "lecture", dur: 5, ar: "ولهذا كان السلف الصالح يهتمون بتصحيح النية أكثر من اهتمامهم بكثرة العمل.", en: "That is why the righteous predecessors (the salaf) cared more about correcting their intention than about the quantity of their deeds." },
   { kind: "interpreter", dur: 5, en: "He is explaining the famous hadith about intentions, narrated by Umar, may Allah be pleased with him." },
   { kind: "lecture", dur: 6, ar: "قال ابن المبارك رحمه الله: رب عمل صغير تكبره النية، ورب عمل كبير تصغره النية.", en: "Ibn al-Mubarak (RH) said: “How many a small deed is made great by the intention, and how many a great deed is made small by the intention.”" },
@@ -48,7 +49,7 @@ export class DemoEngine extends Emitter {
         this.emit("entry", e);
         continue;
       }
-      Object.assign(e, { ar: s.ar, state: "awaiting" });
+      Object.assign(e, { ar: s.ar, state: "awaiting", ...(s.quran ? { quran: s.quran } : {}) });
       this.emit("entry", e);
       await this._wait(1800); // …waits briefly for the next sentence (look-ahead)
       if (this.stopped) return;

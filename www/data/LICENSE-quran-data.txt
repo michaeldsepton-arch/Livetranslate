@@ -1,0 +1,13 @@
+Qur'an text data (quran-ar.json)
+================================
+Arabic text (Uthmani script, with diacritics) of the Qur'an, 114 surahs / 6,236 verses.
+
+Source: "quran-json" by Risan Bagja Pradana (https://github.com/risan/quran-json), which uses the Uthmani text from
+The Noble Qur'an Encyclopedia (https://quranenc.com/en/home). Surah names (transliteration) come from Tanzil
+(https://tanzil.net).
+
+This file is a reformatted subset (Arabic text and surah names only) of that dataset and is therefore shared under the
+same licence: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+https://creativecommons.org/licenses/by-sa/4.0/
+
+The application code of Lisan is MIT-licensed and only reads this data file; it does not alter the Qur'an text.

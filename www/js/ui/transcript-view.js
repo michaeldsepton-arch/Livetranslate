@@ -1,7 +1,7 @@
 // Renders entries as flowing paragraphs.  Updates are incremental (per sentence) and each newly
 // committed sentence fades in once — text that is already on screen is never touched again.
 import { h, fmtClock } from "../util.js";
-import { groupEntries } from "../engine/transcript.js";
+import { groupEntries, mergeRefs } from "../engine/transcript.js";
 import { icon } from "./icons.js";
 
 const place = (parent, child, index) => {
@@ -47,14 +47,19 @@ export class TranscriptView {
     const time = h("span", { class: "time" });
     const meta = h("div", { class: "meta" }, time);
     if (interp) meta.append(h("span", { class: "tag" }, icon("user"), "Interpreter"));
+    const qTag = h("span", { class: "tag q" });
+    meta.append(qTag);
     const ar = h("p", { class: "ar", dir: "rtl", lang: "ar" });
     const en = h("p", { class: "en", lang: "en" });
     const el = h("article", { class: `block ${interp ? "interpreter" : "lecture"}` }, meta, ar, en);
-    return { el, time, ar, en };
+    return { el, time, ar, en, qTag };
   }
 
   _update(b, g) {
     b.time.textContent = fmtClock(g.t0);
+    const refs = mergeRefs(g.entries.flatMap((e) => e.quran || []));
+    b.el.classList.toggle("quranic", refs.length > 0);
+    b.qTag.replaceChildren(...(refs.length ? [icon("library"), `Qur'an · ${refs.join(" · ")}`] : []));
     g.entries.forEach((e, i) => {
       let rec = this.spans.get(e.id);
       if (!rec) {

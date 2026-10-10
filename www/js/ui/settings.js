@@ -124,6 +124,7 @@ export function buildSettings(app, screen) {
           h("div", { class: "field" }, h("label", {}, "The speaker's Arabic"),
             segmented([["fusha", "Fusha"], ["saudi", "Fusha + Saudi"], ["other", "Other dialect"]], s.dialect, (v) => app.update({ dialect: v })),
             h("div", { class: "seg-note" }, "Standard Arabic is the default; \"Fusha + Saudi\" also understands everyday Saudi words that slip in.")),
+          toggleRow("Recognise Qur'an recitation", "When verses are recited, shows the exact Arabic text from the Mushaf, tags the surah and verse, and translates their true meaning.", s.quranMatching, (v) => app.update({ quranMatching: v })),
           h("div", { class: "field" }, h("label", {}, "Who is speaking?"),
             segmented([["auto", "Sheikh + English interpreter"], ["ar", "Arabic only"]], s.lectureLang, (v) => app.update({ lectureLang: v })),
             h("div", { class: "seg-note" }, "With an interpreter, English speech is detected automatically and shown as their words — it is never re-translated."))),

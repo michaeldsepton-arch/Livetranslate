@@ -16,6 +16,7 @@ import { cleanTranscript } from "./hallucination.js";
 import { ApiError } from "./errors.js";
 import { scriptLang, langCode, ARABIC_LOOKALIKES, lastWords } from "./arabic.js";
 import { buildSystemPrompt, buildUserPrompt, cleanTranslation } from "./prompts.js";
+import { looksLikeEnglish } from "./english.js";
 import { DELAY_PRESETS } from "../settings.js";
 
 export class Emitter {
@@ -40,8 +41,11 @@ export class Emitter {
 const NOISE_ENGLISH = /^(thank you|thanks|thanks for watching|bye|you|okay|ok|so|yeah|um|uh|hmm)[.!\s]*$/i;
 
 export class LectureEngine extends Emitter {
-  constructor({ router, settings, now = () => Date.now(), maxParallelStt = 2 } = {}) {
+  constructor({ router, settings, now = () => Date.now(), maxParallelStt = 2, quran = null } = {}) {
     super();
+    this.quran = quran; // QuranIndex | null: restores exact verse text when recitation is recognised
+    this.quranNext = null;
+    this.quranMisses = 0;
     this.router = router;
     this.settings = settings;
     this.now = now;
@@ -125,6 +129,7 @@ export class LectureEngine extends Emitter {
         if (ARABIC_LOOKALIKES.has(said) && script === "ar") again = "ar"; // Arabic speech labelled Persian/Urdu: same script, wrong words
         else if (said === "ar" && script === "en") again = "ar"; // it "translated" instead of transcribing
         else if (said === "en" && script === "ar") again = "en"; // English speech written out in Arabic letters
+        else if (script === "en" && !looksLikeEnglish(res.text)) again = "ar"; // Arabic recitation written in Latin letters ("Tabbat yada abin habin…")
         if (again) {
           // for English, drop the Arabic primer so it cannot pull the output back into Arabic script
           const retry = (item) => this.router.providers[item.provider].transcribe(wav, { model: item.model, language: again, prompt: again === "en" ? "" : prompt, signal: this.abort.signal });
@@ -159,12 +164,12 @@ export class LectureEngine extends Emitter {
   _commitStt(e, res) {
     this.audio.delete(e.id);
     const guess = scriptLang(res.text);
-    const text = cleanTranscript(res, guess === "ar" ? this.arTail : "");
+    let text = cleanTranscript(res, guess === "ar" ? this.arTail : "");
     const lang = scriptLang(text);
     if (!text || (lang !== "ar" && lang !== "en")) return this._drop(e);
 
     if (lang === "en") {
-      if (NOISE_ENGLISH.test(text.trim())) return this._drop(e);
+      if (NOISE_ENGLISH.test(text.trim()) || !looksLikeEnglish(text)) return this._drop(e); // phantom phrase, or Arabic spelled in Latin letters
       e.kind = "interpreter";
       e.en = text;
       e.state = "done";
@@ -173,6 +178,15 @@ export class LectureEngine extends Emitter {
       this.emit("entry", e);
     } else {
       e.kind = "lecture";
+      if (this.quran) {
+        const q = this.quran.annotate(text, this.quranNext);
+        if (q) {
+          text = q.text; // the exact verse words, with diacritics
+          e.quran = q.refs;
+          this.quranNext = q.next;
+          this.quranMisses = 0;
+        } else if (++this.quranMisses > 1) this.quranNext = null; // keep the place across one unmatched chunk
+      }
       e.ar = text;
       e.state = "awaiting";
       e.sttDoneAt = this.now();
@@ -229,7 +243,7 @@ export class LectureEngine extends Emitter {
         70
       );
       const glossary = this.glossary.find([prevLecture?.ar, e.ar, nextAr].filter(Boolean).join(" "), 14);
-      const user = buildUserPrompt({ current: e.ar, previous: prevLecture?.ar || "", next: nextAr, recent, glossary, context: this.settings.context || "" });
+      const user = buildUserPrompt({ current: e.ar, previous: prevLecture?.ar || "", next: nextAr, recent, glossary, context: this.settings.context || "", quran: e.quran || [] });
       const { value, item } = await this.router.run(
         "llm",
         (it) => this.router.providers[it.provider].chat({ model: it.model, system: this.system, user, signal: this.abort.signal }),
@@ -328,6 +342,6 @@ export class LectureEngine extends Emitter {
   snapshot() {
     return this.entries
       .filter((e) => e.state === "done" || (e.kind === "lecture" && e.ar))
-      .map(({ id, seq, t0, t1, kind, ar, en, state, breakBefore }) => ({ id, seq, t0, t1, kind, ar, en, state: state === "done" ? "done" : "partial", ...(breakBefore ? { breakBefore } : {}) }));
+      .map(({ id, seq, t0, t1, kind, ar, en, state, breakBefore, quran }) => ({ id, seq, t0, t1, kind, ar, en, state: state === "done" ? "done" : "partial", ...(breakBefore ? { breakBefore } : {}), ...(quran ? { quran } : {}) }));
   }
 }

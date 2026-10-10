@@ -318,3 +318,9 @@ details.adv { margin-top: 6px; } details.adv summary { cursor: pointer; font-siz
 .wm-ar { font-family: var(--font-ar); font-weight: 700; color: var(--accent); margin-inline-start: 8px; font-size: 1.22em; letter-spacing: 0; vertical-align: -1px; }
 .wordmark { display: flex; align-items: baseline; justify-content: center; gap: 10px; margin: 2px 0 14px; font-size: 13px; font-weight: 650; letter-spacing: 0.34em; text-transform: uppercase; color: var(--accent); }
 .wordmark .wm-ar { font-size: 24px; letter-spacing: 0; text-transform: none; margin: 0; vertical-align: baseline; }
+
+/* Qur'an passages: tag + gold Arabic + a hairline beside the English */
+.block .meta .tag.q { color: var(--gold-300); }
+:root[data-theme="light"] .block .meta .tag.q { color: var(--gold-700); }
+.block.quranic .ar { color: var(--accent-strong); font-size: calc(23px * var(--text-scale)); opacity: 1; }
+.block.quranic .en { border-inline-start: 2px solid var(--gold-500); padding-inline-start: 12px; }

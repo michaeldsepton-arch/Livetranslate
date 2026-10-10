@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { groupEntries, buildTxt, suggestFilename } from "../www/js/engine/transcript.js";
+import { groupEntries, buildTxt, suggestFilename, mergeRefs } from "../www/js/engine/transcript.js";
 import { SessionStore, MemoryBackend } from "../www/js/store.js";
 
 const E = (id, t0, t1, kind, ar, en) => ({ id, t0, t1, kind, ar, en, state: "done" });
@@ -74,4 +74,25 @@ test("undo after delete: a removed lecture can be put back unchanged", async () 
   const back = (await store.list())[0];
   assert.equal(back.title, "Keep me");
   assert.equal(back.entries[0].en, "Words.");
+});
+
+test("txt export tags Qur'an passages", () => {
+  const session = { title: "T", startedAt: 0, durationSec: 60, entries: [
+    { id: "1", t0: 0, t1: 5, kind: "lecture", ar: "تبت يدا أبي لهب وتب", en: "Perish the hands of Abu Lahab, and perish he.", quran: [{ label: "Al-Masad 111:1" }], state: "done" } ] };
+  assert.ok(buildTxt(session).includes("[00:00:00]\n(Qur'an: Al-Masad 111:1)\nPerish the hands"));
+});
+
+test("a block changes identity when its speaker kind changes (no stale styling)", () => {
+  const before = groupEntries([E("a", 0, 4, "lecture", "", "")])[0].key;
+  const after = groupEntries([E("a", 0, 4, "interpreter", "", "Hello.")])[0].key;
+  assert.notEqual(before, after);
+});
+
+test("Qur'an references of a paragraph merge into one range", () => {
+  const r = (surah, from, to) => ({ surah, name: "Al-Masad", from, to, label: `Al-Masad ${surah}:${from}` });
+  assert.deepEqual(mergeRefs([r(111, 1, 1), r(111, 2, 5), r(111, 5, 5)]), ["Al-Masad 111:1–5"]);
+  assert.deepEqual(mergeRefs([r(111, 1, 2), { surah: 112, name: "Al-Ikhlas", from: 1, to: 2, label: "x" }]), ["Al-Masad 111:1–2", "Al-Ikhlas 112:1–2"]);
+  assert.deepEqual(mergeRefs([r(111, 1, 1), r(111, 4, 5)]), ["Al-Masad 111:1", "Al-Masad 111:4–5"], "gaps are not merged");
+  assert.deepEqual(mergeRefs([{ label: "Al-Ikhlas 112:1–2" }, { label: "Al-Ikhlas 112:1–2" }]), ["Al-Ikhlas 112:1–2"], "refs without numbers (demo) stay as written");
+  assert.deepEqual(mergeRefs(undefined), []);
 });

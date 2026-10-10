@@ -13,6 +13,7 @@ ACCURACY
 - Translate faithfully. Do not add, explain, summarise or soften. Keep the speaker's tone: address, questions, emphasis, repetition.
 - Names of people and places: standard English transliteration (Abu Hurayrah, Umar ibn al-Khattab, Makkah). Never translate a name by its meaning. When a GLOSSARY entry applies, use its spelling exactly.
 - Qur'an and hadith: translate the meaning accurately and reverently. Do not invent surah/ayah numbers or narrators that are not spoken.
+- RECOGNISE SCRIPTURE: if CURRENT is a Qur'an verse (even if the transcription is slightly wrong, or only part of a verse), identify it and give the verse's true meaning in clear modern English in line with well-known translations (e.g. Saheeh International) — never a literal rendering of mis-heard words. The same for famous hadith.
 - If a stretch is unintelligible, write [unclear] rather than guessing.
 - If CURRENT is already English, return it unchanged.`;
 
@@ -45,10 +46,14 @@ export function buildSystemPrompt({ termStyle = "keep", honorifics = "short", di
  * @param {{ar:string,en:string}[]} [p.glossary]
  * @param {string} [p.context]     free-text lecture context from Settings
  */
-export function buildUserPrompt({ current, previous = "", next = "", recent = "", glossary = [], context = "" }) {
+export function buildUserPrompt({ current, previous = "", next = "", recent = "", glossary = [], context = "", quran = [] }) {
   const parts = [];
   if (context.trim()) parts.push(`LECTURE CONTEXT:\n${context.trim().slice(0, 600)}`);
   if (glossary.length) parts.push("GLOSSARY:\n" + glossary.map((g) => `${g.ar} → ${g.en}`).join("\n"));
+  if (quran.length)
+    parts.push(
+      `QUR'AN: CURRENT contains the Qur'an — ${quran.map((r) => r.label).join("; ")}. Its Arabic wording has been checked against the Mushaf. Translate those verses as the Qur'an's meaning (not word-for-word guesses); any words outside the verses are the speaker's own.`
+    );
   parts.push(`RECENT (English already shown):\n${recent.trim() || "(start of lecture)"}`);
   if (previous.trim()) parts.push(`PREVIOUS (Arabic, context only):\n${lastWords(previous, 45)}`);
   parts.push(`CURRENT (translate this):\n${current.trim()}`);

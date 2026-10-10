@@ -21,6 +21,7 @@ and get confused when an English interpreter starts speaking.
 | **An English interpreter speaks too** | Every audio chunk is language-detected. English is shown as **Interpreter** text (italic, gold bar) and is never re-translated; Arabic is translated. The interpreter's words are also given to the translator as context for the next Arabic passage. |
 | **Save the transcript as a text file** | When you stop, a `.txt` is written to **Downloads/Lisan** (and kept in the in-app **Library**). Share, copy, rename, re-export or delete any lecture later (delete has an Undo; long-press to select several). |
 | **Free** | Uses the free tiers of Groq (Whisper + an open LLM) and, optionally, Google Gemini as a backup. No subscription, no card. |
+| **Qur'an recitation** | Recited verses are recognised against the full text of the Qur'an: the exact Arabic (with diacritics) replaces any mis-heard words, the surah and verse are tagged (e.g. *Al-Masad 111:2–5*), and the translator is told it is translating the Qur'an so it gives the true meaning. Works for verses quoted inside a lecture too. Can be switched off in Settings. |
 | **Fusha, with the odd Saudi word** | The translator is told the speaker uses Modern Standard Arabic and may slip into Saudi (Najdi/Hijazi) colloquial words, and to read those in context. Change it in *Settings → This lecture → The speaker's Arabic*. |
 | **Nice design from the logo** | Navy / gold / cream palette taken from the logo; Amiri for Arabic, Literata for reading, dark and light themes. |
 
@@ -133,5 +134,5 @@ assets-src/              logo source sheet + master icon
 
 ## Credits & licences
 
-App code: MIT. Fonts: Inter, Literata, Amiri (SIL OFL, licences in `www/fonts/`). Icons: Feather (MIT). Speech: OpenAI Whisper,
+App code: MIT. Qur'an text data (`www/data/quran-ar.json`): CC BY-SA 4.0, from [quran-json](https://github.com/risan/quran-json) / The Noble Qur'an Encyclopedia / Tanzil — see `www/data/LICENSE-quran-data.txt`. Fonts: Inter, Literata, Amiri (SIL OFL, licences in `www/fonts/`). Icons: Feather (MIT). Speech: OpenAI Whisper,
 served by Groq. Translation: open large language models served by Groq / Google Gemini.

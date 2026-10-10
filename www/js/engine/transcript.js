@@ -22,7 +22,7 @@ export function groupEntries(entries) {
       g.words + words > MAX_WORDS ||
       e.breakBefore;
     if (startNew) {
-      g = { key: "g" + e.id, kind: e.kind, t0: e.t0, t1: e.t1, entries: [], words: 0 };
+      g = { key: `${e.kind}:${e.id}`, kind: e.kind, t0: e.t0, t1: e.t1, entries: [], words: 0 };
       groups.push(g);
     }
     g.entries.push(e);
@@ -30,6 +30,20 @@ export function groupEntries(entries) {
     g.words += words;
   }
   return groups;
+}
+
+/** Qur'an references of a paragraph, merged: Al-Masad 111:1 + 111:2–5 -> "Al-Masad 111:1–5". */
+export function mergeRefs(refs) {
+  const out = [];
+  for (const r of refs || []) {
+    const prev = out[out.length - 1];
+    const can = prev && r.surah && prev.surah === r.surah && r.to >= r.from && prev.to >= prev.from && r.from <= prev.to + 1 && r.to >= prev.from;
+    if (can) {
+      prev.from = Math.min(prev.from, r.from);
+      prev.to = Math.max(prev.to, r.to);
+    } else if (!out.some((o) => o.label === r.label && !o.surah)) out.push({ ...r });
+  }
+  return out.map((r) => (r.surah ? `${r.name} ${r.surah}:${r.from === r.to ? r.from : `${r.from}–${r.to}`}` : r.label));
 }
 
 const clean = (s) => (s || "").replace(/\s+/g, " ").trim();
@@ -60,6 +74,8 @@ export function buildTxt(session, { includeArabic = true, timestamps = true } = 
       const en = g.entries.map((e) => clean(e.en)).filter(Boolean).join(" ");
       const ar = g.entries.map((e) => clean(e.ar)).filter(Boolean).join(" ");
       if (timestamps) lines.push(`[${fmtClock(g.t0)}]`);
+      const refs = mergeRefs(g.entries.flatMap((e) => e.quran || []));
+      if (refs.length) lines.push(`(Qur'an: ${refs.join("; ")})`);
       if (en) lines.push(en);
       else if (!includeArabic && ar) lines.push("(untranslated)");
       if (includeArabic && ar) lines.push("‏" + ar); // RLM so editors lay the Arabic line out right-to-left

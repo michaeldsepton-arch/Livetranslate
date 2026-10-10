@@ -10,6 +10,7 @@ import { DEFAULT_SETTINGS, DELAY_PRESETS, loadSettings, saveSettings } from "./s
 import { SessionStore, IdbBackend, MemoryBackend } from "./store.js";
 import { buildTxt, suggestFilename, suggestTitle } from "./engine/transcript.js";
 import { DemoEngine } from "./demo.js";
+import { loadQuran } from "./engine/quran.js";
 import { debounce, wordCount } from "./util.js";
 import { toast } from "./ui/overlay.js";
 import * as platform from "./platform.js";
@@ -127,7 +128,8 @@ export class App extends Emitter {
         const router = this.buildRouter();
         await router.init();
         if (router.exhausted) throw new Error("Your API key was rejected. Check it in Settings → Connection.");
-        this.engine = new LectureEngine({ router, settings: this.settings });
+        const quran = this.settings.quranMatching ? await loadQuran() : null;
+        this.engine = new LectureEngine({ router, settings: this.settings, quran });
         const p = DELAY_PRESETS[this.settings.delay] || DELAY_PRESETS.balanced;
         this.chunker = new Chunker({
           minChunkMs: p.minChunkMs,
