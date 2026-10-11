@@ -5,20 +5,53 @@ import { SessionStore, MemoryBackend } from "../www/js/store.js";
 
 const E = (id, t0, t1, kind, ar, en) => ({ id, t0, t1, kind, ar, en, state: "done" });
 
-test("entries flow into paragraphs: speaker changes and long pauses start new ones", () => {
+test("a paragraph is one speaker's whole turn: only a change of speaker starts a new one", () => {
   const g = groupEntries([
     E("1", 0, 4, "lecture", "أ", "One."),
     E("2", 4.5, 8, "lecture", "ب", "Two."),
     E("3", 9, 12, "interpreter", "", "Interpreter."),
-    E("4", 13, 16, "lecture", "ج", "Three."),
-    E("5", 25, 28, "lecture", "د", "Four after a long pause."),
+    E("4", 13, 16, "interpreter", "", "Interpreter again after a pause."),
+    E("5", 40, 44, "interpreter", "", "And again, much later, still the interpreter."),
+    E("6", 45, 48, "lecture", "ج", "Three."),
+    E("7", 60, 64, "lecture", "د", "Four after a pause."),
   ]);
-  assert.deepEqual(g.map((x) => x.entries.map((e) => e.id).join("")), ["12", "3", "4", "5"]);
+  assert.deepEqual(g.map((x) => [x.kind, x.entries.map((e) => e.id).join("")]), [["lecture", "12"], ["interpreter", "345"], ["lecture", "67"]]);
 });
 
-test("paragraphs are capped so they stay readable", () => {
-  const many = Array.from({ length: 14 }, (_, i) => E(String(i), i * 4, i * 4 + 3.5, "lecture", "ك", "word ".repeat(4) + "word."));
-  assert.ok(groupEntries(many).length >= 3);
+test("a chunk that is still being transcribed does not cut the turn around it in two", () => {
+  const pendingOne = { id: "p", t0: 12, t1: 16, kind: "lecture", ar: "", en: "", state: "transcribing" };
+  const failed = { id: "f", t0: 20, t1: 24, kind: "lecture", ar: "", en: "", state: "error", error: "No connection" };
+  const g = groupEntries([
+    E("1", 0, 4, "interpreter", "", "The interpreter begins"),
+    pendingOne,
+    E("3", 17, 20, "interpreter", "", "and carries on."),
+    failed,
+    E("5", 25, 28, "interpreter", "", "Still the interpreter."),
+  ]);
+  assert.equal(g.length, 1, "one interpreter block, with placeholders inside it");
+  assert.deepEqual(g[0].entries.map((e) => e.id), ["1", "p", "3", "f", "5"]);
+  // once it turns out to be the sheikh, it moves to its own block and the interpreter's turn is still in one piece
+  const resolved = groupEntries([E("1", 0, 4, "interpreter", "", "The interpreter begins"), { ...pendingOne, kind: "lecture", ar: "كلام", en: "Words.", state: "done" }, E("3", 17, 20, "interpreter", "", "and carries on.")]);
+  assert.deepEqual(resolved.map((x) => x.kind), ["interpreter", "lecture", "interpreter"]);
+  // a pending chunk with nothing before it still gets somewhere to live
+  assert.equal(groupEntries([pendingOne]).length, 1);
+  // a recording pause still starts a fresh paragraph
+  const paused = groupEntries([E("1", 0, 4, "lecture", "أ", "One."), { ...E("2", 100, 104, "lecture", "ب", "Two."), breakBefore: true }]);
+  assert.equal(paused.length, 2);
+});
+
+test("only a very long turn is paragraphed, and only where a sentence ends", () => {
+  const sentence = (id, i) => E(String(id), i * 10, i * 10 + 9, "lecture", "ك", ("word ".repeat(49) + "end.").trim());
+  const many = Array.from({ length: 30 }, (_, i) => sentence(i, i)); // 30 sentences of 50 words = 1500 words
+  const g = groupEntries(many);
+  assert.ok(g.length >= 2 && g.length <= 3, `got ${g.length}`);
+  assert.ok(g.slice(0, -1).every((x) => x.words <= 650), "breaks come soon after the soft limit");
+  // mid-sentence text is never cut at the soft limit
+  const unfinished = Array.from({ length: 14 }, (_, i) => E(String(i), i * 10, i * 10 + 9, "lecture", "ك", "word ".repeat(50).trim()));
+  assert.equal(groupEntries(unfinished).length, 1, "700 words but no sentence has ended");
+  // a long silence after a finished sentence is a new paragraph
+  const silence = groupEntries([E("1", 0, 4, "lecture", "أ", "Finished."), E("2", 200, 204, "lecture", "ب", "After a long silence.")]);
+  assert.equal(silence.length, 2);
 });
 
 test("txt export: header, timestamps, English first then Arabic, sheikh and interpreter labelled", () => {

@@ -1,11 +1,17 @@
 // Turning the flat list of entries into readable paragraphs, and into the downloadable .txt.
 import { fmtClock, fmtDate, fmtDuration, fileStamp, slugify, wordCount } from "../util.js";
 
-const GAP_BREAK_S = 3.5; // a pause this long starts a new paragraph...
-const MID_SENTENCE_GAP_S = 12; // ...unless the sentence is still unfinished (a pause between chunks is not the end of a thought)
-const MAX_ENTRIES = 6;
-const MAX_WORDS = 85;
+// One block per speaker turn: the interpreter's block runs on until the sheikh speaks (and the other way round).  A pause or the
+// size of the text never cuts a turn in two, because the speaker has not changed.  The only exceptions are a recording pause/resume
+// or a lost microphone (e.breakBefore), and, so that a very long uninterrupted talk is still readable, a very long turn is
+// paragraphed at the end of a sentence.
+const LONG_TURN_WORDS = 600; // soft: break here, but only where a sentence ends
+const HUGE_TURN_WORDS = 1200; // hard
+const LONG_PAUSE_S = 90; // a silence this long, after a finished sentence, is a new paragraph
 const SENTENCE_END = /[.!?…:"”’)\]]\s*$/;
+
+/** A chunk still being transcribed has no speaker yet; it must not cut the paragraph around it in two. */
+const pending = (e) => !e.ar && !e.en && (e.state === "transcribing" || e.state === "error");
 
 /**
  * Group consecutive entries of the same speaker into flowing paragraphs.
@@ -14,17 +20,21 @@ const SENTENCE_END = /[.!?…:"”’)\]]\s*$/;
 export function groupEntries(entries) {
   const groups = [];
   let g = null;
+  let last = null; // the latest entry with text in the open group
   for (const e of entries) {
+    if (pending(e) && g && !e.breakBefore) {
+      g.entries.push(e); // shown as a placeholder inside the current turn until we know whose words it holds
+      continue;
+    }
     const words = wordCount(e.en || e.ar);
-    const last = g && g.entries[g.entries.length - 1];
-    const open = !!last && !SENTENCE_END.test((last.en || last.ar || "").trim()); // the previous chunk stopped mid-sentence
+    const ended = !last || SENTENCE_END.test((last.en || last.ar || "").trim());
     const startNew =
       !g ||
       g.kind !== e.kind ||
-      e.t0 - g.t1 > (open ? MID_SENTENCE_GAP_S : GAP_BREAK_S) ||
-      g.entries.length >= MAX_ENTRIES + (open ? 4 : 0) ||
-      g.words + words > MAX_WORDS + (open ? 40 : 0) ||
-      e.breakBefore;
+      e.breakBefore ||
+      (e.t0 - g.t1 > LONG_PAUSE_S && ended) ||
+      (g.words + words > LONG_TURN_WORDS && ended) ||
+      g.words + words > HUGE_TURN_WORDS;
     if (startNew) {
       g = { key: `${e.kind}:${e.id}`, kind: e.kind, t0: e.t0, t1: e.t1, entries: [], words: 0 };
       groups.push(g);
@@ -32,6 +42,7 @@ export function groupEntries(entries) {
     g.entries.push(e);
     g.t1 = Math.max(g.t1, e.t1);
     g.words += words;
+    last = e;
   }
   return groups;
 }

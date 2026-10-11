@@ -135,14 +135,12 @@ test("gpt-4o-transcribe gets a short English prompt; Whisper keeps the Arabic pr
   assert.equal(echo.engine.entries.length, 0);
 });
 
-test("paragraphs: an unfinished sentence is not cut by a pause between chunks, a finished one is", () => {
+test("paragraphs: an unfinished sentence is never cut by a pause between chunks", () => {
   const E = (id, t0, t1, en) => ({ id, seq: +id, t0, t1, kind: "interpreter", ar: "", en, state: "done" });
   const mid = [E("1", 362, 364, "Some of what the brotherhood necessitates and doing good to others includes"), E("2", 376, 390, "guiding them and helping them.")];
-  assert.equal(groupEntries(mid).length, 1, "12 s pause, but the sentence had not ended");
+  assert.equal(groupEntries(mid).length, 1);
   const done = [E("1", 362, 364, "Some of what the brotherhood necessitates includes this."), E("2", 376, 390, "Guiding them and helping them.")];
-  assert.equal(groupEntries(done).length, 2, "a finished sentence followed by a pause starts a new paragraph");
-  const longPause = [E("1", 362, 364, "It was unfinished and"), E("2", 400, 404, "this is something else.")];
-  assert.equal(groupEntries(longPause).length, 2, "but not forever");
+  assert.equal(groupEntries(done).length, 1, "same speaker, so still one paragraph");
 });
 
 import { buildUserPrompt, buildSystemPrompt } from "../www/js/engine/prompts.js";
