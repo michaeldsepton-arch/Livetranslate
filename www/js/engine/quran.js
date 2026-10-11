@@ -180,7 +180,8 @@ export class QuranIndex {
     const ref = { ...this.label(g0, g1), words: canonical }; // (the exact words, so the translator can be told where the verse stops)
     const before = toks.slice(0, idx[i0]);
     const after = toks.slice(idx[i1] + 1);
-    return { text: [...before, canonical, ...after].join(" "), refs: [ref], next: g1 + 1 < this.display.length ? g1 + 1 : null };
+    // fenced with the Qur'anic brackets, so everything (the screen, the file, the translator) can tell the verse from the speaker's own words
+    return { text: [...before, `﴿${canonical}﴾`, ...after].join(" "), refs: [ref], next: g1 + 1 < this.display.length ? g1 + 1 : null };
   }
 
   /** Fuzzy in-order alignment of chunk words q[] against the Qur'an words starting at global index d. */

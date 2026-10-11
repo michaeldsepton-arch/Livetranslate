@@ -322,8 +322,10 @@ details.adv { margin-top: 6px; } details.adv summary { cursor: pointer; font-siz
 /* Qur'an passages: tag + gold Arabic + a hairline beside the English */
 .block .meta .tag.q { color: var(--gold-300); }
 :root[data-theme="light"] .block .meta .tag.q { color: var(--gold-700); }
-.block.quranic .ar { color: var(--accent-strong); font-size: calc(23px * var(--text-scale)); opacity: 1; }
-.block.quranic .en { border-inline-start: 2px solid var(--gold-500); padding-inline-start: 12px; }
+/* only the verse is marked, never the whole paragraph */
+.block .ar .qv { color: var(--accent-strong); font-size: 1.12em; }
+.block .en .qref { color: var(--gold-300); font-size: 0.82em; font-weight: 600; white-space: nowrap; }
+:root[data-theme="light"] .block .en .qref { color: var(--gold-700); }
 
 /* free-allowance panel */
 .usage { margin-top: 4px; }

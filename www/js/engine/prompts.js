@@ -50,7 +50,7 @@ export function buildUserPrompt({ current, previous = "", next = "", recent = ""
   if (glossary.length) parts.push("GLOSSARY:\n" + glossary.map((g) => `${g.ar} → ${g.en}`).join("\n"));
   if (quran.length)
     parts.push(
-      `QUR'AN: CURRENT quotes ${quran.map((r) => r.label).join("; ")}. Only these words are the verse: ${quran.map((r) => `«${r.words || r.label}»`).join(" … ")}. Give just their meaning, in double quotation marks. Do not add, complete or continue the verse beyond them, even if you know the rest: every other word of CURRENT is the speaker's own, so translate it normally outside the quotes.`
+      `QUR'AN: CURRENT quotes ${quran.map((r) => r.label).join("; ")}. Only the words inside ﴿ ﴾ are the verse. Give just their meaning, in double quotation marks. Do not add, complete or continue the verse beyond them, even if you know the rest: every other word of CURRENT is the speaker's own, so translate it normally outside the quotes. Do not write the brackets.`
     );
   parts.push(`RECENT (English already shown):\n${recent.trim() || "(start of lecture)"}`);
   if (previous.trim()) parts.push(`PREVIOUS (Arabic, context only):\n${lastWords(previous, 24)}`);

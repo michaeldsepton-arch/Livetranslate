@@ -123,3 +123,13 @@ test("in a chunk that is nearly all recitation, the cut-off edges still join the
   assert.equal(r.refs[0].name, "Al-Masad");
   assert.ok(r.refs[0].to >= 3);
 });
+
+test("the verse is fenced with ﴿ ﴾ so it can be told apart from the speaker's own words", () => {
+  const r = quran.annotate("قال الله تعالى في كتابه العزيز قل هو الله احد الله الصمد ثم قال الشيخ وهذا يدل على التوحيد");
+  const fenced = r.text.match(/﴿[^﴾]*﴾/g);
+  assert.equal(fenced.length, 1);
+  assert.equal(fenced[0], `﴿${r.refs[0].words}﴾`);
+  assert.ok(r.text.startsWith("قال الله تعالى في كتابه العزيز ﴿"), "words before stay outside");
+  assert.ok(r.text.endsWith("﴾ ثم قال الشيخ وهذا يدل على التوحيد"), "words after stay outside");
+  assert.equal(quran.annotate("أيها الإخوة والأخوات موضوع محاضرتنا اليوم هو الإخلاص وهو أساس قبول الأعمال"), null);
+});

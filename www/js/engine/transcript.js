@@ -63,6 +63,21 @@ export function mergeRefs(refs) {
 
 const clean = (s) => (s || "").replace(/\s+/g, " ").trim();
 
+/** Where in a piece of English its Qur'an reference goes: right after the closing quotation mark (else at the end of that piece). */
+export function refPlacement(en) {
+  const i = Math.max(en.lastIndexOf('"'), en.lastIndexOf("”"));
+  return i >= 0 ? i + 1 : en.length;
+}
+
+/** One piece of English with its Qur'an reference beside the quotation, not above the whole turn: …worship Me." (Qur'an Adh-Dhariyat 51:56) and then… */
+export function inlineRef(e) {
+  const en = clean(e.en);
+  const refs = mergeRefs(e.quran || []);
+  if (!en || !refs.length) return en;
+  const at = refPlacement(en);
+  return `${en.slice(0, at)} (Qur'an ${refs.join("; ")})${en.slice(at)}`;
+}
+
 /**
  * @param {object} session  {title, startedAt, durationSec, context, entries}
  * @param {{includeArabic?:boolean, timestamps?:boolean}} opts
@@ -86,11 +101,9 @@ export function buildTxt(session, { includeArabic = true, timestamps = true } = 
       lines.push(`${stamp}INTERPRETER`);
       lines.push(g.entries.map((e) => clean(e.en)).join(" "));
     } else {
-      const en = g.entries.map((e) => clean(e.en)).filter(Boolean).join(" ");
+      const en = g.entries.map(inlineRef).filter(Boolean).join(" ");
       const ar = g.entries.map((e) => clean(e.ar)).filter(Boolean).join(" ");
       lines.push(`${stamp}SHEIKH`);
-      const refs = mergeRefs(g.entries.flatMap((e) => e.quran || []));
-      if (refs.length) lines.push(`(Qur'an: ${refs.join("; ")})`);
       if (en) lines.push(en);
       else if (!includeArabic && ar) lines.push("(untranslated)");
       if (includeArabic && ar) lines.push("‏" + ar); // RLM so editors lay the Arabic line out right-to-left

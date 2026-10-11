@@ -111,10 +111,21 @@ test("undo after delete: a removed lecture can be put back unchanged", async () 
   assert.equal(back.entries[0].en, "Words.");
 });
 
-test("txt export tags Qur'an passages", () => {
+test("txt export puts a Qur'an reference beside the quotation, never above the whole turn", () => {
   const session = { title: "T", startedAt: 0, durationSec: 60, entries: [
-    { id: "1", t0: 0, t1: 5, kind: "lecture", ar: "تبت يدا أبي لهب وتب", en: "Perish the hands of Abu Lahab, and perish he.", quran: [{ label: "Al-Masad 111:1" }], state: "done" } ] };
-  assert.ok(buildTxt(session).includes("[00:00:00] SHEIKH\n(Qur'an: Al-Masad 111:1)\nPerish the hands"));
+    { id: "1", t0: 0, t1: 5, kind: "lecture", ar: "كلام الشيخ الأول", en: "A sharp tongue may have insulted you.", state: "done" },
+    { id: "2", t0: 6, t1: 11, kind: "lecture", ar: "الله خلقهم لعبادته ﴿وَمَا خَلَقۡتُ ٱلۡجِنَّ وَٱلۡإِنسَ إِلَّا لِيَعۡبُدُونِ﴾ وتأتي تأذيهم", en: 'Allah created them for His worship: "I did not create the jinn and mankind except to worship Me." And then you come and harm them.', quran: [{ label: "Adh-Dhariyat 51:56" }], state: "done" },
+    { id: "3", t0: 12, t1: 17, kind: "lecture", ar: "كلام الشيخ الأخير", en: "Some people even take pleasure in it.", state: "done" },
+  ] };
+  const txt = buildTxt(session);
+  assert.equal(txt.split("SHEIKH").length - 1, 1, "one paragraph for the whole turn");
+  assert.ok(!/^\(Qur'an/m.test(txt), "no reference line above the paragraph");
+  assert.ok(txt.includes('worship Me." (Qur\'an Adh-Dhariyat 51:56) And then you come and harm them.'), "the reference follows the quotation");
+  assert.equal(txt.split("(Qur'an").length - 1, 1, "and only the quoting piece has one");
+  assert.ok(txt.includes("﴿وَمَا خَلَقۡتُ ٱلۡجِنَّ وَٱلۡإِنسَ إِلَّا لِيَعۡبُدُونِ﴾"), "the Arabic fences just the verse");
+  // no closing quotation mark in the English: the reference goes at the end of that piece
+  const plain = buildTxt({ ...session, entries: [{ id: "1", t0: 0, t1: 5, kind: "lecture", ar: "﴿تبت يدا أبي لهب وتب﴾", en: "Perish the hands of Abu Lahab, and perish he.", quran: [{ label: "Al-Masad 111:1" }], state: "done" }] });
+  assert.ok(plain.includes("Perish the hands of Abu Lahab, and perish he. (Qur'an Al-Masad 111:1)"));
 });
 
 test("a block changes identity when its speaker kind changes (no stale styling)", () => {

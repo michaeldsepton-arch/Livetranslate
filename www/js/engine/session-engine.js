@@ -263,7 +263,7 @@ export class LectureEngine extends Emitter {
       e.ar = text;
       e.state = "awaiting";
       e.sttDoneAt = this.now();
-      this.arTail = lastWords((this.arTail + " " + text).trim(), 40);
+      this.arTail = lastWords((this.arTail + " " + text.replace(/[﴾﴿]/g, "")).trim(), 40);
       this.emit("entry", e);
     }
   }

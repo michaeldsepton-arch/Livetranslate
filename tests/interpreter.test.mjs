@@ -147,7 +147,7 @@ import { buildUserPrompt, buildSystemPrompt } from "../www/js/engine/prompts.js"
 
 test("the translator is told exactly which words are the verse and not to complete it", () => {
   const user = buildUserPrompt({ current: "آية وإن كثيرا من الناس عن البر", quran: [{ label: "Yunus 10:92", words: "ءَايَةٗۚ وَإِنَّ كَثِيرٗا مِّنَ ٱلنَّاسِ" }] });
-  assert.match(user, /Only these words are the verse: «ءَايَةٗۚ وَإِنَّ كَثِيرٗا مِّنَ ٱلنَّاسِ»/);
+  assert.match(user, /Only the words inside ﴿ ﴾ are the verse/);
   assert.match(user, /Do not add, complete or continue the verse/);
   assert.match(user, /every other word of CURRENT is the speaker's own/);
   assert.match(buildSystemPrompt(), /Never complete or continue a verse beyond the words in CURRENT/);
