@@ -42,3 +42,104 @@ export function looksTransliterated(text) {
   const kept = words.filter((w) => KEEP.has(w)).length / words.length;
   return common < 0.15 && kept < 0.4;
 }
+
+// ---- two speakers, two languages -------------------------------------------------------------------------
+// The sheikh speaks Arabic and the interpreter English, but a chunk of audio can hold the end of one and the
+// start of the other.  Instead of giving the whole chunk one label, split the text where the language changes.
+
+const AR_LETTER = /[؀-ۿݐ-ݿ]/;
+const LAT_LETTER = /[A-Za-z]/;
+const DIACRITICS = /[ً-ٰٟـ]/g;
+
+/** Arabic that is only honorifics / set phrases (an English speaker saying "sallallahu alayhi wasallam"). */
+const FORMULA_WORDS = new Set(
+  `الله سبحانه وتعالى تعالى صلى عليه وسلم وسلم عليه السلام رضي عنه عنها عنهم عنهما رحمه عز وجل جل جلاله الحمد لله رب العالمين ان شاء ما سبحان اكبر بسم الرحمن الرحيم حديث الحديث نعم`.split(/\s+/)
+);
+const plainAr = (w) => w.replace(DIACRITICS, "").replace(/[أإآ]/g, "ا").replace(/[\u060C\u061B\u061F\u066A-\u066D\u06D4]/g, "").replace(/[^\u0600-\u06FF]/g, "");
+
+export function isFormulaOnly(text) {
+  const words = text.split(/\s+/).map(plainAr).filter(Boolean);
+  return words.length > 0 && words.every((w) => FORMULA_WORDS.has(w));
+}
+
+/**
+ * @returns {{lang:"ar"|"en", text:string}[]}  in spoken order.  One entry for ordinary single-language text.
+ * Short islands (an honorific inside English, a stray English word inside Arabic) stay with the surrounding speaker.
+ */
+export function splitByLanguage(text) {
+  const tokens = (text || "").split(/\s+/).filter(Boolean);
+  if (!tokens.length) return [];
+  const cls = (t) => (AR_LETTER.test(t) ? "ar" : LAT_LETTER.test(t) ? "en" : "x");
+  // runs of one script; punctuation/digits stick to the run before them
+  const runs = [];
+  for (const t of tokens) {
+    const c = cls(t);
+    const last = runs[runs.length - 1];
+    if (c === "x" && last) last.tokens.push(t);
+    else if (last && last.lang === c) last.tokens.push(t);
+    else runs.push({ lang: c === "x" ? "en" : c, tokens: [t], neutralStart: c === "x" });
+  }
+  const textOf = (r) => r.tokens.join(" ");
+  const words = (r) => r.tokens.filter((t) => cls(t) !== "x").length;
+  // a run is "strong" (a real turn of speech) when long enough and not just set phrases / transliterated terms
+  const strong = (r) =>
+    r.lang === "ar" ? words(r) >= 3 && !isFormulaOnly(textOf(r)) : words(r) >= 2 && looksLikeEnglish(textOf(r)) && !englishWords(textOf(r)).every((w) => KEEP.has(w));
+  const flags = runs.map(strong);
+  if (!flags.some(Boolean)) {
+    // nothing clearly a turn: the language with more words wins and takes everything
+    const ar = runs.filter((r) => r.lang === "ar").reduce((n, r) => n + words(r), 0);
+    const en = runs.filter((r) => r.lang === "en").reduce((n, r) => n + words(r), 0);
+    return [{ lang: ar >= en ? "ar" : "en", text: tokens.join(" ") }];
+  }
+  // weak runs join the strong run before them (or, at the very start, the one after)
+  const out = [];
+  let pending = [];
+  runs.forEach((r, i) => {
+    if (flags[i]) {
+      const merged = { lang: r.lang, tokens: [...pending.flatMap((p) => p.tokens), ...r.tokens] };
+      pending = [];
+      const prev = out[out.length - 1];
+      if (prev && prev.lang === merged.lang) prev.tokens.push(...merged.tokens);
+      else out.push(merged);
+    } else if (out.length) {
+      out[out.length - 1].tokens.push(...r.tokens);
+    } else pending.push(r);
+  });
+  return out.map((r) => ({ lang: r.lang, text: r.tokens.join(" ") }));
+}
+
+// Arabic set phrases an interpreter says in English speech, which a recogniser sometimes writes in Arabic letters.
+const NOT_AR = "(?<![\\u0621-\\u064A\\u0671-\\u06D3])"; // (Arabic punctuation does not count as part of a word)
+const NOT_AR_AFTER = "(?![\\u0621-\\u064A\\u0671-\\u06D3])";
+const arRe = (src) => new RegExp(NOT_AR + src + NOT_AR_AFTER, "g");
+const FORMULAE = [
+  [arRe("صلى الله عليه (?:و ?اله )?وسلم"), "ﷺ", "(peace and blessings be upon him)"],
+  [arRe("عليه(?:م|ا)? السلام"), "(AS)", "(peace be upon him)"],
+  [arRe("رضي الله عنهم?ا?"), "(RA)", "(may Allah be pleased with him)"],
+  [arRe("رضي الله عنها"), "(RA)", "(may Allah be pleased with her)"],
+  [arRe("رحمه الله(?: تعالى)?"), "(RH)", "(may Allah have mercy on him)"],
+  [arRe("سبحانه و ?تعالى"), "(SWT)", "(glorified and exalted is He)"],
+  [arRe("(?:عز و ?جل|جل جلاله)"), "(SWT)", "(mighty and majestic is He)"],
+  [arRe("الحمد لله رب العالمين"), "All praise is due to Allah, Lord of the worlds", null],
+  [arRe("الحمد لله"), "Alhamdulillah", null],
+  [arRe("(?:ا?ن|ا?نشاء) ?شاء الله"), "InshaAllah", null],
+  [arRe("ما شاء الله"), "MashaAllah", null],
+  [arRe("سبحان الله"), "SubhanAllah", null],
+  [arRe("الله ا?كبر"), "Allahu Akbar", null],
+  [arRe("بسم الله الرحمن الرحيم"), "In the name of Allah, the Most Gracious, the Most Merciful", null],
+  [arRe("بسم الله"), "Bismillah", null],
+  [arRe("ا?ستغفر الله"), "Astaghfirullah", null],
+  [arRe("الله"), "Allah", null],
+  [arRe("(?:ال)?حديث"), "hadith", null],
+  [arRe("نعم"), "Yes", null],
+  [arRe("تشوفون"), "you see", null],
+];
+
+/** Interpreter text in English letters: set phrases written in Arabic script become their English forms. */
+export function englishizeFormulae(text, honorifics = "short") {
+  if (!AR_LETTER.test(text || "")) return text;
+  let t = text.replace(DIACRITICS, "").replace(/[أإآ]/g, "ا");
+  for (const [re, short, full] of FORMULAE) t = t.replace(re, honorifics === "full" && full ? full : short);
+  t = t.replace(/،/g, ",").replace(/؛/g, ";").replace(/\s+([,.;:!?])/g, "$1").replace(/\s{2,}/g, " ").trim();
+  return /^[a-z]/.test(t) && AR_LETTER.test((text || "").trim()[0]) ? t[0].toUpperCase() + t.slice(1) : t; // a phrase that opened the sentence
+}

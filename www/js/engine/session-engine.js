@@ -11,12 +11,12 @@
 //   4. ORDER — results are committed strictly in speech order even if requests finish out of order.
 import { uid, sleep } from "../util.js";
 import { encodeWav } from "../audio/wav.js";
-import { Glossary, buildWhisperPrompt } from "./glossary.js";
-import { cleanTranscript } from "./hallucination.js";
+import { Glossary, buildWhisperPrompt, buildOpenAiPrompt } from "./glossary.js";
+import { cleanTranscript, stripPrimerEcho } from "./hallucination.js";
 import { ApiError } from "./errors.js";
 import { scriptLang, langCode, ARABIC_LOOKALIKES, lastWords } from "./arabic.js";
 import { buildSystemPrompt, buildUserPrompt, cleanTranslation } from "./prompts.js";
-import { looksLikeEnglish, looksTransliterated } from "./english.js";
+import { looksLikeEnglish, looksTransliterated, splitByLanguage, englishizeFormulae } from "./english.js";
 import { DELAY_PRESETS } from "../settings.js";
 import { MIN_BILLED_AUDIO_SEC } from "./limits.js";
 
@@ -122,7 +122,10 @@ export class LectureEngine extends Emitter {
       if (!wav) throw new ApiError("Audio no longer available", { kind: "bad_request" });
       const language = this.settings.lectureLang === "ar" ? "ar" : undefined;
       const prompt = buildWhisperPrompt({ userTerms: this.userTerms, tail: this.arTail });
-      const call = (lang) => (item) => this.router.providers[item.provider].transcribe(wav, { model: item.model, language: lang, prompt, signal: this.abort.signal });
+      const aiPrompt = buildOpenAiPrompt({ userTerms: this.userTerms });
+      // gpt-4o-transcribe reads its prompt as instructions and echoes it on quiet audio, so it never gets the Arabic primer
+      const promptFor = (item) => (item.provider === "openai" && /transcribe/.test(item.model) ? aiPrompt : prompt);
+      const call = (lang) => (item) => this.router.providers[item.provider].transcribe(wav, { model: item.model, language: lang, prompt: promptFor(item), signal: this.abort.signal });
       const secs = Math.max(0, e.t1 - e.t0);
       let { value: res, item: used } = await this.router.run("stt", call(language), { signal: this.abort.signal });
       this._recordUsage(used, secs);
@@ -136,7 +139,7 @@ export class LectureEngine extends Emitter {
         else if (script === "en" && !looksLikeEnglish(res.text)) again = "ar"; // Arabic recitation written in Latin letters ("Tabbat yada abin habin…")
         if (again) {
           // for English, drop the Arabic primer so it cannot pull the output back into Arabic script
-          const retry = (item) => this.router.providers[item.provider].transcribe(wav, { model: item.model, language: again, prompt: again === "en" ? "" : prompt, signal: this.abort.signal });
+          const retry = (item) => this.router.providers[item.provider].transcribe(wav, { model: item.model, language: again, prompt: again === "en" ? "" : promptFor(item), signal: this.abort.signal });
           const again2 = await this.router.run("stt", retry, { signal: this.abort.signal });
           res = again2.value;
           this._recordUsage(again2.item, secs);
@@ -171,13 +174,39 @@ export class LectureEngine extends Emitter {
     this.audio.delete(e.id);
     const guess = scriptLang(res.text);
     let text = cleanTranscript(res, guess === "ar" ? this.arTail : "");
-    const lang = scriptLang(text);
-    if (!text || (lang !== "ar" && lang !== "en")) return this._drop(e);
+    text = stripPrimerEcho(text, { allowOpening: e.t0 < 120 }); // the recogniser reading its own hint back
+    // One chunk can hold the end of the sheikh and the start of the interpreter (or the other way round):
+    // give each language its own entry instead of one label for the lot.
+    const runs = splitByLanguage(text).filter((r) => {
+      const lang = scriptLang(r.text);
+      if (lang === "en") return !NOISE_ENGLISH.test(r.text.trim()) && looksLikeEnglish(r.text); // not a phantom phrase, nor Arabic spelled in Latin letters
+      return lang === "ar";
+    });
+    if (!runs.length) return this._drop(e);
 
-    if (lang === "en") {
-      if (NOISE_ENGLISH.test(text.trim()) || !looksLikeEnglish(text)) return this._drop(e); // phantom phrase, or Arabic spelled in Latin letters
+    const total = runs.reduce((n, r) => n + r.text.length, 0) || 1;
+    const span = Math.max(0, e.t1 - e.t0);
+    let t = e.t0;
+    let at = this.entries.indexOf(e);
+    runs.forEach((run, i) => {
+      let ent = e;
+      const t1 = i === runs.length - 1 ? e.t1 : t + (span * run.text.length) / total;
+      if (i > 0) {
+        ent = { id: uid("e"), seq: e.seq + i / 100, t0: t, t1, kind: "lecture", ar: "", en: "", state: "transcribing", attempts: 0 };
+        this.entries.splice(++at, 0, ent);
+      } else ent.t1 = t1;
+      this._commitRun(ent, run);
+      t = t1;
+    });
+    this._pump();
+  }
+
+  /** Fill one entry with one run of speech: Arabic (the sheikh, to be translated) or English (the interpreter). */
+  _commitRun(e, run) {
+    let text = run.text;
+    if (scriptLang(text) === "en") {
       e.kind = "interpreter";
-      e.en = text;
+      e.en = englishizeFormulae(text, this.settings.honorifics); // "صلى الله عليه وسلم" said in English speech -> ﷺ
       e.state = "done";
       // everything the sheikh said before the interpreter began no longer needs to wait for look-ahead
       for (const x of this.entries) if (x.seq < e.seq && x.state === "awaiting") x.forceReady = true;
@@ -199,7 +228,6 @@ export class LectureEngine extends Emitter {
       this.arTail = lastWords((this.arTail + " " + text).trim(), 40);
       this.emit("entry", e);
     }
-    this._pump();
   }
 
   /** Count a finished request against the model's free allowance. */

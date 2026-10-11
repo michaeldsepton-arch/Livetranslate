@@ -1,9 +1,11 @@
 // Turning the flat list of entries into readable paragraphs, and into the downloadable .txt.
 import { fmtClock, fmtDate, fmtDuration, fileStamp, slugify, wordCount } from "../util.js";
 
-const GAP_BREAK_S = 3.5; // a pause this long starts a new paragraph
+const GAP_BREAK_S = 3.5; // a pause this long starts a new paragraph...
+const MID_SENTENCE_GAP_S = 12; // ...unless the sentence is still unfinished (a pause between chunks is not the end of a thought)
 const MAX_ENTRIES = 6;
 const MAX_WORDS = 85;
+const SENTENCE_END = /[.!?…:"”’)\]]\s*$/;
 
 /**
  * Group consecutive entries of the same speaker into flowing paragraphs.
@@ -14,12 +16,14 @@ export function groupEntries(entries) {
   let g = null;
   for (const e of entries) {
     const words = wordCount(e.en || e.ar);
+    const last = g && g.entries[g.entries.length - 1];
+    const open = !!last && !SENTENCE_END.test((last.en || last.ar || "").trim()); // the previous chunk stopped mid-sentence
     const startNew =
       !g ||
       g.kind !== e.kind ||
-      e.t0 - g.t1 > GAP_BREAK_S ||
-      g.entries.length >= MAX_ENTRIES ||
-      g.words + words > MAX_WORDS ||
+      e.t0 - g.t1 > (open ? MID_SENTENCE_GAP_S : GAP_BREAK_S) ||
+      g.entries.length >= MAX_ENTRIES + (open ? 4 : 0) ||
+      g.words + words > MAX_WORDS + (open ? 40 : 0) ||
       e.breakBefore;
     if (startNew) {
       g = { key: `${e.kind}:${e.id}`, kind: e.kind, t0: e.t0, t1: e.t1, entries: [], words: 0 };

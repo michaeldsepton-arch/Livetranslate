@@ -64,6 +64,15 @@ export class Glossary {
 }
 
 /**
+ * gpt-4o-transcribe treats its prompt as instructions/context, and echoes it back when the audio is quiet.
+ * So it gets a short English description (never the Arabic primer or the previous text) plus the user's own names.
+ */
+export function buildOpenAiPrompt({ userTerms = [] } = {}) {
+  const terms = userTerms.slice(0, 12).join("، ");
+  return `Arabic Islamic lecture with an English interpreter. Write Arabic in Arabic script and English in English letters.${terms ? ` Names and terms: ${terms}.` : ""}`;
+}
+
+/**
  * Build the (<= ~360 char) prompt given to Whisper: a religious-lecture primer, the user's own terms
  * and the tail of what was just transcribed (the most recent text matters most to the decoder).
  */

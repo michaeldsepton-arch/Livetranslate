@@ -1,6 +1,7 @@
 // Speech recognisers invent text on silence / noise ("subscribe to the channel", "Subtitles by…").
 // These filters remove those, collapse runaway repetition and strip text repeated from the prompt.
 import { normalizeArabic } from "./arabic.js";
+import { WHISPER_PRIMER } from "./glossary-data.js";
 
 const KNOWN_AR = [
   "ترجمة نانسي قنقر", "ترجمه نانسي قنقر", "اشتركوا في القناة", "اشترك في القناة", "اشتركوا بالقناة",
@@ -21,6 +22,8 @@ const plainEn = (s) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+
 export function isKnownHallucination(text) {
   const t = (text || "").trim();
   if (!t) return false;
+  const plain = plainEn(t);
+  if (plain.includes("islamic lecture") && plain.includes("interpreter")) return true; // the OpenAI prompt read back to us
   const words = t.split(/\s+/).length;
   if (words > 14) return false;
   const ar = normalizeArabic(t);
@@ -28,6 +31,47 @@ export function isKnownHallucination(text) {
   const en = plainEn(t);
   if (en && KNOWN_EN.some((k) => en.includes(k))) return true;
   return false;
+}
+
+// The recogniser is shown a short religious primer; on quiet audio it sometimes reads the primer back
+// ("بسم الله الرحمن الرحيم. الحمد لله رب العالمين…" at the end of a chunk, or its list of subjects).
+const primerTokens = normalizeArabic(WHISPER_PRIMER).split(/\s+/).filter(Boolean);
+const PRIMER_OPENING = primerTokens.slice(0, primerTokens.indexOf(normalizeArabic("وسلم")) + 1); // basmala + hamdala + salawat: a real lecture opens with it too
+const norm = (w) => normalizeArabic(w) || w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+const strip = (w) => norm(w).replace(/^ال/, "");
+const SUBJECTS = new Set(["توحيد", "عقيده", "فقه", "حديث", "سيره", "صحابه"].map((w) => strip(w)));
+
+/**
+ * Remove a read-back of the primer from a transcript.  The opening of a lecture (allowOpening) may genuinely
+ * begin with the same words, so that is left alone.
+ */
+export function stripPrimerEcho(text, { allowOpening = false } = {}) {
+  let tokens = (text || "").split(/\s+/).filter(Boolean);
+  if (!tokens.length) return "";
+  // the list of subjects (tawhid, aqidah, fiqh, hadith, seerah, the Companions): nobody says this
+  for (let i = 0; i < tokens.length; ) {
+    let j = i;
+    while (j < tokens.length && SUBJECTS.has(strip(tokens[j]))) j++;
+    if (j - i >= 4) tokens = [...tokens.slice(0, i), ...tokens.slice(j)];
+    else i = Math.max(j, i + 1);
+  }
+  if (!allowOpening) {
+    const keys = tokens.map(norm);
+    const n = PRIMER_OPENING.length;
+    const at = (from) => keys.slice(from, from + n).join(" ") === PRIMER_OPENING.join(" ");
+    if (keys.length >= n && at(keys.length - n)) tokens = tokens.slice(0, keys.length - n); // appended to the end
+    else if (keys.length >= n && at(0)) tokens = tokens.slice(n); // or prepended
+    // what followed the basmala + hamdala in the primer may follow it here
+    const rest = primerTokens.slice(n);
+    for (let k = Math.min(rest.length, 8); k >= 3 && tokens.length; k--) {
+      const key = tokens.map(norm);
+      if (key.slice(-k).join(" ") === rest.slice(0, k).join(" ") && tokens.length > k + 2) {
+        tokens = tokens.slice(0, tokens.length - k);
+        break;
+      }
+    }
+  }
+  return tokens.join(" ").trim();
 }
 
 /** Drop low-confidence segments reported by Whisper-style verbose output. */

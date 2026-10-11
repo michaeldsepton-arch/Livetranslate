@@ -17,7 +17,7 @@ test("entries flow into paragraphs: speaker changes and long pauses start new on
 });
 
 test("paragraphs are capped so they stay readable", () => {
-  const many = Array.from({ length: 14 }, (_, i) => E(String(i), i * 4, i * 4 + 3.5, "lecture", "ك", "word ".repeat(5)));
+  const many = Array.from({ length: 14 }, (_, i) => E(String(i), i * 4, i * 4 + 3.5, "lecture", "ك", "word ".repeat(4) + "word."));
   assert.ok(groupEntries(many).length >= 3);
 });
 
