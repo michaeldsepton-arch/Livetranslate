@@ -59,6 +59,8 @@ export class LectureEngine extends Emitter {
     this.audio = new Map(); // entry id -> wav (kept until the speech is transcribed)
     this.seq = 0;
     this.arTail = ""; // last Arabic transcribed (prompt + de-duplication)
+    this.langCheckFails = 0;
+    this.langCheckOffUntil = 0;
     this.translating = false;
     this.finishing = false;
     this.halted = false;
@@ -127,9 +129,18 @@ export class LectureEngine extends Emitter {
       const promptFor = (item) => (item.provider === "openai" && /transcribe/.test(item.model) ? aiPrompt : prompt);
       const call = (lang) => (item) => this.router.providers[item.provider].transcribe(wav, { model: item.model, language: lang, prompt: promptFor(item), signal: this.abort.signal });
       const secs = Math.max(0, e.t1 - e.t0);
+      // gpt-4o-transcribe never says which language it heard, and with an interpreter in the room it sometimes writes English
+      // speech in Arabic letters (or translates it), which then gets filed under the sheikh.  A cheap Whisper pass, run alongside
+      // it, supplies the language label the rules below need.
+      const first = typeof this.router.chain === "function" ? this.router.chain("stt")[0] : null;
+      const check = !language && this.settings.languageCheck !== false && first && first.provider === "openai" && /transcribe/.test(first.model) ? this._langCheck(wav, secs) : null;
       let { value: res, item: used } = await this.router.run("stt", call(language), { signal: this.abort.signal });
       this._recordUsage(used, secs);
       if (!language) {
+        if (check && !res.language) {
+          const label = await check;
+          if (label) res = { ...res, language: label };
+        }
         const said = langCode(res.language);
         const script = scriptLang(res.text);
         let again = null;
@@ -141,13 +152,40 @@ export class LectureEngine extends Emitter {
           // for English, drop the Arabic primer so it cannot pull the output back into Arabic script
           const retry = (item) => this.router.providers[item.provider].transcribe(wav, { model: item.model, language: again, prompt: again === "en" ? "" : promptFor(item), signal: this.abort.signal });
           const again2 = await this.router.run("stt", retry, { signal: this.abort.signal });
-          res = again2.value;
           this._recordUsage(again2.item, secs);
+          // a wrong guess about the language must never replace good text with a translation or transliteration of it
+          const redo = (again2.value.text || "").trim();
+          const sane = again === "en" ? scriptLang(redo) === "en" && looksLikeEnglish(redo) : scriptLang(redo) === "ar";
+          if (sane || !res.text.trim()) res = again2.value;
         }
       }
       return res;
     } finally {
       this._release();
+    }
+  }
+
+  /** The language of a chunk as Whisper hears it ("en", "ar", …), or "" when it cannot be had (never throws, never delays a lecture for long). */
+  async _langCheck(wav, secs) {
+    if (this.langCheckOffUntil > this.now()) return "";
+    const { providers, dead, models } = this.router;
+    let pick = null;
+    if (providers.groq && !dead.has("groq")) {
+      const list = (models && models.groq && models.groq.stt) || [];
+      pick = { provider: "groq", model: list.find((m) => /turbo/.test(m)) || list[0] || "whisper-large-v3-turbo" };
+    } else if (providers.openai && !dead.has("openai")) pick = { provider: "openai", model: "whisper-1" };
+    if (!pick) return "";
+    try {
+      const r = await providers[pick.provider].transcribe(wav, { model: pick.model, signal: this.abort.signal });
+      this._recordUsage({ provider: pick.provider, id: `${pick.provider}:${pick.model}` }, secs);
+      this.langCheckFails = 0;
+      return langCode(r.language);
+    } catch {
+      if (!this.stopped && ++this.langCheckFails >= 3) {
+        this.langCheckOffUntil = this.now() + 5 * 60000; // keep going without it for a while rather than stall on a failing service
+        this.langCheckFails = 0;
+      }
+      return "";
     }
   }
 

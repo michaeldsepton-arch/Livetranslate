@@ -69,7 +69,7 @@ export class Glossary {
  */
 export function buildOpenAiPrompt({ userTerms = [] } = {}) {
   const terms = userTerms.slice(0, 12).join("، ");
-  return `Arabic Islamic lecture with an English interpreter. Write Arabic in Arabic script and English in English letters.${terms ? ` Names and terms: ${terms}.` : ""}`;
+  return `Islamic lecture: an Arabic speaker alternating with an English interpreter. Transcribe each exactly as spoken: Arabic in Arabic script, English in English letters. Never translate or transliterate.${terms ? ` Names and terms: ${terms}.` : ""}`;
 }
 
 /**

@@ -206,7 +206,8 @@ export function buildSettings(app, screen) {
           toggleRow("Recognise Qur'an recitation", "When verses are recited, shows the exact Arabic text from the Mushaf, tags the surah and verse, and translates their true meaning.", s.quranMatching, (v) => app.update({ quranMatching: v })),
           h("div", { class: "field" }, h("label", {}, "Who is speaking?"),
             segmented([["auto", "Sheikh + English interpreter"], ["ar", "Arabic only"]], s.lectureLang, (v) => app.update({ lectureLang: v })),
-            h("div", { class: "seg-note" }, "With an interpreter, English speech is detected automatically and shown as their words — it is never re-translated."))),
+            h("div", { class: "seg-note" }, "With an interpreter, English speech is detected automatically and shown as their words — it is never re-translated.")),
+          toggleRow("Double-check who is speaking", "When OpenAI hears the speech, a quick extra Whisper pass (Groq, or OpenAI's whisper-1) confirms each piece's language, so the interpreter's English is never filed under the sheikh. Costs a few cents an hour.", s.languageCheck, (v) => app.update({ languageCheck: v }))),
 
         h("section", { class: "card" },
           h("h3", {}, icon("headphones"), "Smoothness"),

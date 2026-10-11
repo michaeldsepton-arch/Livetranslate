@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS = {
   paidDefault: 1, // settings version: older saved settings are switched to the paid defaults once
   quranMatching: true, // recognise recited Qur'an verses and restore the exact text
   lectureLang: "auto", // auto (Arabic + English interpreter) | ar (Arabic only)
+  languageCheck: true, // with OpenAI speech: a cheap Whisper pass labels each chunk's language (keeps the interpreter apart from the sheikh)
   showArabic: false,
   textSize: 1,
   theme: "dark", // dark | light

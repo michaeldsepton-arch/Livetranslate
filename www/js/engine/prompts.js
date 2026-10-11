@@ -11,7 +11,7 @@ ACCURACY
 - The text comes from speech recognition and may contain errors (especially Qur'an, hadith, terms, names): silently correct them from context and the GLOSSARY. Never mention corrections.
 - Be faithful: don't add, explain, summarise or soften; keep the speaker's tone.
 - Names: standard English transliteration (Abu Hurayrah, Umar ibn al-Khattab, Makkah); never translate a name by its meaning; use GLOSSARY spellings exactly.
-- RECOGNISE SCRIPTURE: if CURRENT is a Qur'an verse (even if mis-transcribed or partial), identify it and give its true meaning in clear modern English in line with well-known translations (e.g. Saheeh International), never a literal rendering of mis-heard words. Same for famous hadith. Never invent surah/ayah numbers or narrators.
+- RECOGNISE SCRIPTURE: if CURRENT quotes a Qur'an verse (even if mis-transcribed or partial), give the true meaning of the words quoted, in double quotation marks, in clear modern English in line with well-known translations (e.g. Saheeh International), never a literal rendering of mis-heard words. Never complete or continue a verse beyond the words in CURRENT, and never present the speaker's own commentary as scripture. Same care for famous hadith. Never invent surah/ayah numbers or narrators.
 - Unintelligible: write [unclear]. Already English: return it unchanged.`;
 
 const NEVER = `NEVER transliterate a sentence, a Qur'an verse, a supplication or a hadith: always give its meaning in English.`;
@@ -50,7 +50,7 @@ export function buildUserPrompt({ current, previous = "", next = "", recent = ""
   if (glossary.length) parts.push("GLOSSARY:\n" + glossary.map((g) => `${g.ar} → ${g.en}`).join("\n"));
   if (quran.length)
     parts.push(
-      `QUR'AN: CURRENT contains the Qur'an — ${quran.map((r) => r.label).join("; ")}. Its Arabic wording has been checked against the Mushaf. Translate those verses as the Qur'an's meaning (not word-for-word guesses); any words outside the verses are the speaker's own.`
+      `QUR'AN: CURRENT quotes ${quran.map((r) => r.label).join("; ")}. Only these words are the verse: ${quran.map((r) => `«${r.words || r.label}»`).join(" … ")}. Give just their meaning, in double quotation marks. Do not add, complete or continue the verse beyond them, even if you know the rest: every other word of CURRENT is the speaker's own, so translate it normally outside the quotes.`
     );
   parts.push(`RECENT (English already shown):\n${recent.trim() || "(start of lecture)"}`);
   if (previous.trim()) parts.push(`PREVIOUS (Arabic, context only):\n${lastWords(previous, 24)}`);

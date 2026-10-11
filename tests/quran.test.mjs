@@ -92,3 +92,34 @@ test("transliterated sentences are detected; single terms and short expressions 
   assert.ok(!looksTransliterated("Taqwa is the foundation, and salah is its pillar."));
   assert.ok(!looksTransliterated("He told them about zakah and the importance of sincerity in every deed."));
 });
+
+// ---- from a real recording: the quotation must stop where the verse stops ----
+test("a quoted phrase does not swallow the speaker's next little word (…من الناس عن البر)", () => {
+  const r = quran.annotate("آية وإن كثيرا من الناس عن البر وعن الصلة، ما يصل أقرباءه ويتكبر عليهم فمعالجة الأمراض القلبية هذه مهمة");
+  assert.ok(r);
+  assert.equal(r.refs[0].label, "Yunus 10:92");
+  assert.ok(r.text.includes(" عن البر وعن الصلة"), "the speaker's own 'عن البر' stays exactly as heard");
+  assert.ok(norm(r.refs[0].words).endsWith(norm("من الناس")), "the verse words end on a real word, not the stray 'عن'");
+});
+
+test("a verse is not continued into the speaker's own words (…فما له من مكرم إن كما أنه يرى)", () => {
+  const r = quran.annotate("يتكبر الله عز وجل يهينه ومن يهن الله فما له من مكرم إن كما أنه يرى الناس صغار الناس يرونه صغير");
+  assert.ok(r);
+  assert.equal(r.refs[0].label, "Al-Hajj 22:18");
+  assert.ok(norm(r.refs[0].words).endsWith(norm("فما له من مكرم")), "ends at the last word he recited");
+  assert.ok(r.text.endsWith(" إن كما أنه يرى الناس صغار الناس يرونه صغير"), "'إن' and what follows are his own words, untouched");
+});
+
+test("two unmatched words after a quotation are his own, not more of the verse", () => {
+  const r = quran.annotate("قال الله تعالى قل هو الله احد الله الصمد ثم قال");
+  assert.ok(r);
+  assert.ok(r.text.endsWith("ثم قال"));
+  assert.ok(norm(r.refs[0].words).startsWith(norm("قل هو الله")), "a verse that really starts with a little word keeps it");
+});
+
+test("in a chunk that is nearly all recitation, the cut-off edges still join the verse", () => {
+  const r = quran.annotate("سورة تبت يدا ابي لهب وتب ما اغنى عنه ماله وما كسب سيصلى نارا ذات لهب");
+  assert.ok(r);
+  assert.equal(r.refs[0].name, "Al-Masad");
+  assert.ok(r.refs[0].to >= 3);
+});

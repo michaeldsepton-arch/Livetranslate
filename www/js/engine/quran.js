@@ -12,6 +12,13 @@ import { normalizeArabic } from "./arabic.js";
 const MIN_INLIERS = 4; // matched words needed before we trust a match
 const MAX_BUCKET = 80; // ignore 3-word phrases that occur more than this many times (too generic)
 
+// Little words that start and end half the sentences in the language.  A match may not begin or end on one of them: a stray
+// "إن" or "عن" next to a quoted phrase is far more likely the speaker's own word than the next word of the verse.
+const EDGE_WORDS = new Set(
+  `و ف ب ل ك من في على علي عن الي الى ان إن أن ما لا لم لن قد ثم او أو بل اذا إذا هو هي هم انه إنه انها إنها هذا هذه ذلك كل كان يا`.split(/\s+/).map((w) => normalizeArabic(w) || w)
+);
+const isEdgeWord = (norm) => !norm || norm.length <= 2 || EDGE_WORDS.has(norm);
+
 function editDistance(a, b, max) {
   if (Math.abs(a.length - b.length) > max) return max + 1;
   let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
@@ -146,17 +153,31 @@ export class QuranIndex {
     const density = best.inliers / (best.i1 - best.i0 + 1);
     if (best.inliers < need || density < (best.continued ? 0.5 : 0.6)) return null;
 
-    // 3. extend over a couple of unmatched words at the very start/end of the chunk (probably the same verse)
-    let i0 = best.i0, i1 = best.i1, g0 = best.gFirst, g1 = best.gLast;
+    // 3. the quotation may not begin or end on a little word ("... of the people عن" -> the speaker's own "عن البر")
+    const chain = best.chain.slice();
+    const word = (pair) => normalizeArabic(toks[idx[pair[0]]]);
+    // (unless that little word really is where the verse begins or ends: "قل هو الله أحد", "…وما كسب")
+    const startsVerse = (g) => this.verses[this.verseOfWord[g]].start === g;
+    const endsVerse = (g) => this.verses[this.verseOfWord[g]].end - 1 === g;
+    while (chain.length && isEdgeWord(word(chain[0])) && !startsVerse(chain[0][1])) chain.shift();
+    while (chain.length && isEdgeWord(word(chain[chain.length - 1])) && !endsVerse(chain[chain.length - 1][1])) chain.pop();
+    if (chain.length < need) return null;
+    let i0 = chain[0][0], i1 = chain[chain.length - 1][0], g0 = chain[0][1], g1 = chain[chain.length - 1][1];
+    const inliers = chain.length;
+
+    // 4. in a chunk that is nearly all recitation, a couple of unmatched words at the very start/end are probably the same verse
+    //    (cut-off or mis-heard); when the speaker is merely quoting a phrase inside his own talk they are his words, so leave them
     const [sLo, sHi] = this.surahRange[this.surahOfWord(g0) - 1];
-    if (i0 <= 2) { g0 = Math.max(sLo, g0 - i0); i0 = 0; }
-    if (m - 1 - i1 <= 2) { g1 = Math.min(sHi - 1, g1 + (m - 1 - i1)); i1 = m - 1; }
+    if (inliers / m >= 0.6) {
+      if (i0 <= 2) { g0 = Math.max(sLo, g0 - i0); i0 = 0; }
+      if (m - 1 - i1 <= 2) { g1 = Math.min(sHi - 1, g1 + (m - 1 - i1)); i1 = m - 1; }
+    }
 
     // the Basmala on its own is a greeting, not worth tagging as "Al-Fatihah 1:1"
     if (g0 === 0 && g1 <= 3) return null;
 
-    const ref = this.label(g0, g1);
     const canonical = this.display.slice(g0, g1 + 1).join(" ");
+    const ref = { ...this.label(g0, g1), words: canonical }; // (the exact words, so the translator can be told where the verse stops)
     const before = toks.slice(0, idx[i0]);
     const after = toks.slice(idx[i1] + 1);
     return { text: [...before, canonical, ...after].join(" "), refs: [ref], next: g1 + 1 < this.display.length ? g1 + 1 : null };
@@ -199,7 +220,7 @@ export class QuranIndex {
       }
     }
     if (cur.length > best.length) best = cur;
-    return { inliers: best.length, i0: best[0][0], i1: best[best.length - 1][0], gFirst: best[0][1], gLast: best[best.length - 1][1] };
+    return { inliers: best.length, i0: best[0][0], i1: best[best.length - 1][0], gFirst: best[0][1], gLast: best[best.length - 1][1], chain: best };
   }
 }
 
