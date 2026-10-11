@@ -9,6 +9,10 @@ import { OpenAIProvider } from "../providers/openai.js";
 export const GROQ_KEYS_URL = "https://console.groq.com/keys";
 export const GEMINI_KEYS_URL = "https://aistudio.google.com/apikey";
 export const OPENAI_KEYS_URL = "https://platform.openai.com/api-keys";
+// where to add credit / switch on a paid plan
+export const GROQ_BILLING_URL = "https://console.groq.com/settings/billing/plans";
+export const GEMINI_BILLING_URL = "https://ai.google.dev/gemini-api/docs/billing";
+export const OPENAI_BILLING_URL = "https://platform.openai.com/settings/organization/billing/overview";
 
 /** Checks a key against the service.  Resolves {ok, message}. */
 export async function testKey(provider, key) {
@@ -61,7 +65,9 @@ export function openKeySetup(app, { thenStart = true } = {}) {
       ),
       h("div", { class: "field" }, input, status),
       save,
-      h("p", { style: "margin:14px 0 0;font-size:12.5px;color:var(--text-faint)" }, "Your audio goes directly from your phone to Groq. The key stays on this phone only."),
+      h("p", { style: "margin:14px 0 0;font-size:12.5px;color:var(--text-faint)" }, "Prefer OpenAI or Gemini? Get a key here, then paste it in Settings → Connection: ",
+        h("a", { href: OPENAI_KEYS_URL, target: "_blank", rel: "noopener" }, "OpenAI key"), " · ", h("a", { href: GEMINI_KEYS_URL, target: "_blank", rel: "noopener" }, "Gemini key"), "."),
+      h("p", { style: "margin:10px 0 0;font-size:12.5px;color:var(--text-faint)" }, "Your audio goes directly from your phone to the service you choose. Keys stay on this phone only."),
     ];
   });
 }

@@ -2,7 +2,7 @@
 import { h } from "../util.js";
 import { icon } from "./icons.js";
 import { backButton, toggleRow, segmented } from "./common.js";
-import { testKey, GROQ_KEYS_URL, GEMINI_KEYS_URL, OPENAI_KEYS_URL } from "./setup.js";
+import { testKey, GROQ_KEYS_URL, GEMINI_KEYS_URL, OPENAI_KEYS_URL, GROQ_BILLING_URL, GEMINI_BILLING_URL, OPENAI_BILLING_URL } from "./setup.js";
 import { DELAY_PRESETS } from "../settings.js";
 import { builtinGlossary } from "../engine/glossary.js";
 import { MicCapture } from "../audio/capture.js";
@@ -12,7 +12,7 @@ import { usagePanel, officialLinks } from "./usage.js";
 import { speechTest } from "./speech-test.js";
 import { APP_VERSION } from "../version.js";
 
-function keyField(app, { provider, label, field, placeholder, link, linkText, hint }) {
+function keyField(app, { provider, label, field, placeholder, link, linkText, billing, hint }) {
   const input = h("input", { class: "input", type: "password", value: app.settings[field], placeholder, autocapitalize: "off", autocomplete: "off", spellcheck: "false", "aria-label": label });
   const eye = h("button", { class: "icon-btn", "aria-label": "Show key", onclick: () => {
       const show = input.type === "password";
@@ -33,7 +33,8 @@ function keyField(app, { provider, label, field, placeholder, link, linkText, hi
     h("label", {}, label),
     h("div", { class: "keyrow" }, input, eye, test),
     status,
-    h("p", { class: "hint", style: "margin:0" }, hint, " ", h("a", { href: link, target: "_blank", rel: "noopener" }, linkText))
+    h("p", { class: "hint", style: "margin:0" }, hint, " ", h("a", { href: link, target: "_blank", rel: "noopener" }, linkText),
+      billing ? [" · ", h("a", { href: billing, target: "_blank", rel: "noopener" }, "Add credit / paid plan →")] : null)
   );
 }
 
@@ -133,9 +134,9 @@ export function buildSettings(app, screen) {
         h("section", { class: "card" },
           h("h3", {}, icon("key"), "Connection"),
           h("p", { class: "hint" }, "Keys are stored only on this phone. One is enough; a second acts as a backup if the first fails. Lisan uses the strongest model of each service and treats your accounts as paid, so it never rations requests. Use a paid key for long lectures: free keys run out within minutes."),
-          keyField(app, { provider: "groq", label: "Groq key — speech recognition + translation", field: "groqKey", placeholder: "gsk_…", link: GROQ_KEYS_URL, linkText: "Get a free key →", hint: "Recommended. Runs Whisper large-v3." }),
-          keyField(app, { provider: "gemini", label: "Google Gemini key — optional backup", field: "geminiKey", placeholder: "AIza…", link: GEMINI_KEYS_URL, linkText: "Get a free key →", hint: "Takes over automatically if the first service fails or hits its limit." }),
-          keyField(app, { provider: "openai", label: "OpenAI key — optional, pay-as-you-go", field: "openaiKey", placeholder: "sk-…", link: OPENAI_KEYS_URL, linkText: "Get a key →", hint: "No free tier, so no daily limit: add a few dollars of credit and pay for what you use (roughly $0.3–1.5 per lecture hour). With Auto below it is used first." }),
+          keyField(app, { provider: "groq", label: "Groq key — speech recognition + translation", field: "groqKey", placeholder: "gsk_…", link: GROQ_KEYS_URL, linkText: "Get a key →", billing: GROQ_BILLING_URL, hint: "Runs Whisper large-v3 and the translation models. Fast; use a paid plan for long lectures." }),
+          keyField(app, { provider: "gemini", label: "Google Gemini key — optional backup", field: "geminiKey", placeholder: "AIza…", link: GEMINI_KEYS_URL, linkText: "Get a key →", billing: GEMINI_BILLING_URL, hint: "Takes over automatically if the first service fails. It uses the newest Flash model, which can cost more; to control that, pin an older one under Advanced → Gemini model override." }),
+          keyField(app, { provider: "openai", label: "OpenAI key — optional, pay-as-you-go", field: "openaiKey", placeholder: "sk-…", link: OPENAI_KEYS_URL, linkText: "Get a key →", billing: OPENAI_BILLING_URL, hint: "No free tier, so no daily limit: add a few dollars of credit and pay for what you use (roughly $0.3–1.5 per lecture hour). With Auto below it is used first." }),
           enginePicker(app, {
             label: "Speech recognition (hearing the Arabic)",
             field: "sttEngine",
