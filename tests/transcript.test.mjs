@@ -21,7 +21,7 @@ test("paragraphs are capped so they stay readable", () => {
   assert.ok(groupEntries(many).length >= 3);
 });
 
-test("txt export: header, timestamps, English first then Arabic, interpreter labelled", () => {
+test("txt export: header, timestamps, English first then Arabic, sheikh and interpreter labelled", () => {
   const session = {
     title: "Seerah — Week 3",
     startedAt: Date.UTC(2026, 9, 10, 14, 32),
@@ -36,12 +36,14 @@ test("txt export: header, timestamps, English first then Arabic, interpreter lab
   const txt = buildTxt(session);
   assert.ok(txt.includes("Title:    Seerah — Week 3"));
   assert.ok(txt.includes("Duration: 1 h 02 min"));
-  assert.ok(txt.includes("[00:00:03]\nIn the name of Allah. All praise is due to Allah.\n‏بسم الله الحمد لله"));
+  assert.ok(txt.includes("[00:00:03] SHEIKH\nIn the name of Allah. All praise is due to Allah.\n‏بسم الله الحمد لله"));
   assert.ok(txt.includes("[00:01:05] INTERPRETER\nThe Sheikh thanked everyone for coming."));
   assert.ok(txt.trim().endsWith("— end of transcript —"));
   const plain = buildTxt(session, { includeArabic: false, timestamps: false });
   assert.ok(!plain.includes("بسم"));
   assert.ok(!plain.includes("[00:"));
+  assert.ok(plain.includes("\nSHEIKH\nIn the name of Allah."), "the speaker label stays even without timestamps");
+  assert.ok(plain.includes("\nINTERPRETER\nThe Sheikh thanked everyone for coming."));
   assert.match(suggestFilename(session), /^Seerah-Week-3_2026-10-10_\d\d-\d\d\.txt$/); // custom title is used
   assert.match(suggestFilename({ ...session, title: "Lecture — 10 Oct 2026, 14:32" }), /^lecture_2026-10-10_\d\d-\d\d\.txt$/); // default title -> "lecture"
 });
@@ -79,7 +81,7 @@ test("undo after delete: a removed lecture can be put back unchanged", async () 
 test("txt export tags Qur'an passages", () => {
   const session = { title: "T", startedAt: 0, durationSec: 60, entries: [
     { id: "1", t0: 0, t1: 5, kind: "lecture", ar: "تبت يدا أبي لهب وتب", en: "Perish the hands of Abu Lahab, and perish he.", quran: [{ label: "Al-Masad 111:1" }], state: "done" } ] };
-  assert.ok(buildTxt(session).includes("[00:00:00]\n(Qur'an: Al-Masad 111:1)\nPerish the hands"));
+  assert.ok(buildTxt(session).includes("[00:00:00] SHEIKH\n(Qur'an: Al-Masad 111:1)\nPerish the hands"));
 });
 
 test("a block changes identity when its speaker kind changes (no stale styling)", () => {

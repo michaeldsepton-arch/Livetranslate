@@ -77,7 +77,7 @@ export function buildTxt(session, { includeArabic = true, timestamps = true } = 
     } else {
       const en = g.entries.map((e) => clean(e.en)).filter(Boolean).join(" ");
       const ar = g.entries.map((e) => clean(e.ar)).filter(Boolean).join(" ");
-      if (timestamps) lines.push(`[${fmtClock(g.t0)}]`);
+      lines.push(`${stamp}SHEIKH`);
       const refs = mergeRefs(g.entries.flatMap((e) => e.quran || []));
       if (refs.length) lines.push(`(Qur'an: ${refs.join("; ")})`);
       if (en) lines.push(en);
