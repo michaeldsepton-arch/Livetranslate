@@ -39,6 +39,8 @@ and get confused when an English interpreter starts speaking.
 
 Updates install straight over the old version and keep your keys and saved lectures.
 
+**Updating from inside the app.** *Settings → App updates → Check for updates* asks GitHub for the newest build (the app also looks quietly, at most every 6 hours, when it opens, and never while recording). If a newer one exists, tap **Download**: your phone fetches `Lisan.apk`, and you open it to install over the current version. This needs the repository to be **public** (a private repository answers "not found" to the app); otherwise the app offers a link to the downloads page instead. Every build stamps its GitHub run number into the app, which is what is compared.
+
 ### Getting the free key (one minute, no card)
 
 1. Go to <https://console.groq.com/keys> and sign in with Google or e-mail.

@@ -52,6 +52,11 @@ jobs:
       - name: Accept Android SDK licences
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
+      - name: Stamp the build number into the app (used by "Check for updates")
+        run: |
+          printf 'export const BUILD_NUMBER = %s;\nexport const BUILD_COMMIT = "%s";\n' "${{ github.run_number }}" "${GITHUB_SHA::7}" > www/js/build-info.js
+          cat www/js/build-info.js
+
       - name: Sync web app into the Android project
         run: npx cap sync android
 

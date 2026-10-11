@@ -1,6 +1,7 @@
 import { App } from "./app.js";
 import { buildShell } from "./ui/shell.js";
 import { toast } from "./ui/overlay.js";
+import { autoCheck } from "./update.js";
 
 const app = new App();
 window.__app = app; // handy for debugging in a desktop browser
@@ -20,6 +21,12 @@ document.addEventListener("focusout", () => setTimeout(() => !isField(document.a
 app.recoverInterrupted().then((s) => {
   if (s) toast("Recovered your unfinished lecture.", { kind: "ok", ms: 8000, action: "Open", onAction: () => app.go("reader", { id: s.id }) });
 });
+
+// A quiet look for a newer version a few seconds after the app opens (never during a lecture).
+setTimeout(async () => {
+  const r = await autoCheck({ isBusy: () => app.active });
+  if (r && r.status === "available") toast(`Update available — build ${r.latest}`, { kind: "ok", ms: 12000, action: "Open", onAction: () => app.go("settings") });
+}, 6000);
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http") && location.hostname !== "localhost") {
   // (offline shell for the web version; the Android app already bundles everything)

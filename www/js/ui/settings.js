@@ -11,6 +11,8 @@ import { toast } from "./overlay.js";
 import { usagePanel, officialLinks } from "./usage.js";
 import { speechTest } from "./speech-test.js";
 import { APP_VERSION } from "../version.js";
+import { BUILD_NUMBER } from "../build-info.js";
+import { checkForUpdate, RELEASE_PAGE } from "../update.js";
 
 function keyField(app, { provider, label, field, placeholder, link, linkText, billing, hint }) {
   const input = h("input", { class: "input", type: "password", value: app.settings[field], placeholder, autocapitalize: "off", autocomplete: "off", spellcheck: "false", "aria-label": label });
@@ -98,6 +100,34 @@ function enginePicker(app, { label, field, options, notes }) {
   return h("div", { class: "field" }, h("label", {}, label),
     segmented(options, app.settings[field], (v) => { app.update({ [field]: v }); show(v); }),
     note);
+}
+
+/** "Check for updates": looks up the newest build; if there is one, a link hands the APK to the phone's browser to install. */
+function updateCard() {
+  const status = h("div", { class: "status-line", style: "margin-top:8px" });
+  const links = h("div", { style: "margin-top:10px;display:flex;gap:8px;flex-wrap:wrap" });
+  const btn = h("button", { class: "btn small" }, icon("download"), "Check for updates");
+  btn.onclick = async () => {
+    btn.disabled = true;
+    links.replaceChildren();
+    status.className = "status-line";
+    status.textContent = "Checking…";
+    try {
+      const r = await checkForUpdate();
+      status.className = "status-line " + (r.status === "available" || r.status === "current" ? "ok" : r.status === "dev" ? "" : "bad");
+      status.textContent = r.message;
+      if (r.status === "available") links.append(h("a", { class: "btn small primary", href: r.url, target: "_blank", rel: "noopener" }, icon("download"), `Download build ${r.latest}`));
+      if (r.status === "private" || r.status === "available") links.append(h("a", { class: "btn small", href: r.page || RELEASE_PAGE, target: "_blank", rel: "noopener" }, "Open the downloads page"));
+    } catch {
+      status.className = "status-line bad";
+      status.textContent = "The check was interrupted.";
+    }
+    btn.disabled = false;
+  };
+  return h("section", { class: "card" },
+    h("h3", {}, icon("download"), "App updates"),
+    h("p", { class: "hint" }, BUILD_NUMBER ? `You have Lisan build ${BUILD_NUMBER}. ` : "", "Look for a newer version. If there is one, tap Download: your phone fetches Lisan.apk, then open it to install over this version. Your keys and saved lectures are kept."),
+    h("div", {}, btn), status, links);
 }
 
 export function buildSettings(app, screen) {
@@ -234,9 +264,11 @@ export function buildSettings(app, screen) {
             adv("Gemini model override", "modelGemini", "gemini-2.5-flash"),
             adv("OpenAI translation model override", "modelOpenai", "gpt-4.1  (try gpt-4.1-mini to spend less)"))),
 
+        updateCard(),
+
         h("div", { class: "about" },
           h("img", { src: "assets/logo-mark.png", alt: "" }),
-          h("div", {}, `Lisan ${APP_VERSION}`),
+          h("div", {}, BUILD_NUMBER ? `Lisan 1.0.${BUILD_NUMBER}` : `Lisan ${APP_VERSION}`),
           h("div", {}, "Lisan (لسان) is Arabic for “tongue” and “language”."),
           h("div", {}, "Open source · speech by Whisper · translation by large language models."),
           h("div", {}, "Machine translation can make mistakes — check verses and hadith against reliable sources."))
