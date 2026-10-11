@@ -13,8 +13,9 @@ export const DEFAULT_SETTINGS = {
   honorifics: "short", // short | full
   dialect: "saudi", // fusha | saudi | other
   backgroundListening: true, // keep listening with the screen off / another app in front
-  groqPaid: false, // account is on a paid plan: the free-tier limits do not apply
-  geminiPaid: false,
+  groqPaid: true, // accounts are assumed to be on paid plans (no free-tier rationing, pacing or warnings); switch off for a free key
+  geminiPaid: true,
+  paidDefault: 1, // settings version: older saved settings are switched to the paid defaults once
   quranMatching: true, // recognise recited Qur'an verses and restore the exact text
   lectureLang: "auto", // auto (Arabic + English interpreter) | ar (Arabic only)
   showArabic: false,
@@ -49,6 +50,11 @@ export function loadSettings(storage = globalThis.localStorage) {
     if (raw) {
       const saved = JSON.parse(raw);
       // older versions had one "use Gemini first" switch for both stages
+      if (saved.paidDefault !== 1) {
+        saved.groqPaid = true;
+        saved.geminiPaid = true;
+        saved.paidDefault = 1;
+      }
       if (saved.preferGemini && saved.sttEngine === undefined && saved.llmEngine === undefined) saved.sttEngine = saved.llmEngine = "gemini", saved.preferGemini = false;
       return { ...DEFAULT_SETTINGS, ...saved };
     }

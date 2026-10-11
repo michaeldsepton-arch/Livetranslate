@@ -170,7 +170,8 @@ test("OpenAI can be chosen first for either stage, and is only a last-resort fal
   const mkAll = (engines) => { const r = mk(all, engines); r.models.openai = { stt: ["gpt-4o-transcribe", "whisper-1"], llm: ["gpt-4.1", "gpt-4.1-mini"] }; return r; };
   assert.deepEqual(ids(mkAll({ stt: "openai", llm: "openai" }), "stt").slice(0, 3), ["openai:gpt-4o-transcribe", "openai:whisper-1", "groq:whisper-large-v3"]);
   assert.equal(ids(mkAll({ llm: "openai" }), "llm")[0], "openai:gpt-4.1");
-  assert.equal(ids(mkAll({}), "llm").at(-1), "openai:gpt-4.1-mini", "auto never starts with the paid service");
+  assert.equal(ids(mkAll({}), "llm")[0], "openai:gpt-4.1", "auto starts with OpenAI when it has a key: it is paid, so it cannot run out of free allowance");
+  assert.equal(ids(mk({ groq: P, gemini: P }), "llm")[0], "groq:big", "and with no OpenAI key, with Groq");
   assert.equal(ids(mkAll({ stt: "groq-turbo" }), "stt").at(-1), "openai:whisper-1");
   const only = mk({ openai: P });
   only.models.openai = { stt: ["gpt-4o-transcribe"], llm: ["gpt-4.1"] };
@@ -225,4 +226,83 @@ test("a Read-only OpenAI key is called out clearly", () => {
   assert.equal(e.kind, "auth");
   assert.match(e.message, /Read only/);
   assert.match(e.message, /"All" permissions/);
+});
+
+// ---- paid by default, strong models first ----
+import { isWeakModel } from "../www/js/providers/models.js";
+
+test("accounts are treated as paid by default, and older saved settings move to that once", () => {
+  assert.equal(DEFAULT_SETTINGS.groqPaid, true);
+  assert.equal(DEFAULT_SETTINGS.geminiPaid, true);
+  const store = (o) => ({ getItem: () => JSON.stringify(o) });
+  const old = loadSettings(store({ groqKey: "k", groqPaid: false, geminiPaid: false })); // saved by an earlier version
+  assert.equal(old.groqPaid, true);
+  assert.equal(old.geminiPaid, true);
+  assert.equal(old.groqKey, "k", "nothing else is touched");
+  const chosen = loadSettings(store({ groqPaid: false, geminiPaid: true, paidDefault: 1 })); // a deliberate choice after the update
+  assert.equal(chosen.groqPaid, false);
+  assert.equal(loadSettings({ getItem: () => null }).groqPaid, true);
+});
+
+test("weaker models are recognised, anything unknown is trusted, and a model typed in Settings always is", () => {
+  for (const [p, k, m] of [["groq", "llm", "llama-3.1-8b-instant"], ["groq", "llm", "qwen/qwen3-32b"], ["groq", "llm", "openai/gpt-oss-20b"], ["gemini", "llm", "gemini-2.5-flash-lite"], ["openai", "llm", "gpt-4.1-mini"], ["openai", "stt", "gpt-4o-mini-transcribe"]])
+    assert.equal(isWeakModel(p, k, m), true, m);
+  for (const [p, k, m] of [["groq", "llm", "openai/gpt-oss-120b"], ["groq", "llm", "moonshotai/kimi-k2-instruct-0905"], ["groq", "stt", "whisper-large-v3-turbo"], ["gemini", "llm", "gemini-3.5-flash"], ["openai", "llm", "gpt-4.1"], ["openai", "stt", "gpt-4o-transcribe"], ["groq", "llm", "something-new"]])
+    assert.equal(isWeakModel(p, k, m), false, m);
+  const r = new Router({ openai: P }, { overrides: { openai: "gpt-4.1-mini" }, sleep: async () => {} });
+  r.models.openai = { stt: ["gpt-4o-transcribe"], llm: ["gpt-4.1-mini", "gpt-4.1"] };
+  assert.equal(r.chain("llm").find((i) => i.model === "gpt-4.1-mini").weak, false);
+});
+
+test("every strong model of every service comes before any weak one", () => {
+  const r = mk({ groq: P, gemini: P, openai: P }, { llm: "groq" });
+  r.models.groq = { stt: ["whisper-large-v3"], llm: ["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"] };
+  r.models.gemini = { stt: ["gemini-2.5-flash"], llm: ["gemini-3.5-flash", "gemini-2.5-flash-lite"] };
+  r.models.openai = { stt: ["gpt-4o-transcribe"], llm: ["gpt-4.1", "gpt-4.1-mini"] };
+  assert.deepEqual(ids(r, "llm"), ["groq:openai/gpt-oss-120b", "gemini:gemini-3.5-flash", "openai:gpt-4.1", "groq:llama-3.3-70b-versatile", "groq:llama-3.1-8b-instant", "gemini:gemini-2.5-flash-lite", "openai:gpt-4.1-mini"]);
+});
+
+test("a brief limit on the strong model is waited out, not answered by a weaker model", async () => {
+  const slept = [];
+  const t = { now: 1_000_000 };
+  const r = new Router({ groq: P }, { now: () => t.now, sleep: async (ms) => (slept.push(ms), (t.now += ms)) });
+  r.models.groq = { stt: ["whisper-large-v3"], llm: ["openai/gpt-oss-120b", "llama-3.1-8b-instant"] };
+  const used = [];
+  const out = await r.run("llm", async (it) => {
+    used.push(it.model);
+    if (used.length === 1) throw new ApiError("slow down", { kind: "rate", retryAfterMs: 12000 });
+    return "ok";
+  });
+  assert.equal(out.value, "ok");
+  assert.deepEqual(used, ["openai/gpt-oss-120b", "openai/gpt-oss-120b"], "the same strong model, after the wait");
+  assert.ok(slept.reduce((a, b) => a + b, 0) >= 11000);
+});
+
+test("when the strong models are parked for a long time (daily limit), the weak one is the last resort", async () => {
+  const r = new Router({ groq: P }, { sleep: async () => {} });
+  r.models.groq = { stt: ["whisper-large-v3"], llm: ["openai/gpt-oss-120b", "llama-3.1-8b-instant"] };
+  const used = [];
+  const out = await r.run("llm", async (it) => {
+    used.push(it.model);
+    if (it.model === "openai/gpt-oss-120b") throw new ApiError("daily", { kind: "quota", retryAfterMs: 3_600_000 });
+    return "ok";
+  });
+  assert.deepEqual(used, ["openai/gpt-oss-120b", "llama-3.1-8b-instant"]);
+  // later calls go straight to the fallback while the strong model stays parked
+  const again = [];
+  await r.run("llm", async (it) => (again.push(it.model), "ok"));
+  assert.deepEqual(again, ["llama-3.1-8b-instant"]);
+});
+
+test("another service's strong model beats this service's weak one", async () => {
+  const r = new Router({ groq: P, openai: P }, { engines: { llm: "groq" }, sleep: async () => {} });
+  r.models.groq = { stt: ["whisper-large-v3"], llm: ["openai/gpt-oss-120b", "llama-3.1-8b-instant"] };
+  r.models.openai = { stt: ["gpt-4o-transcribe"], llm: ["gpt-4.1"] };
+  const used = [];
+  await r.run("llm", async (it) => {
+    used.push(it.id);
+    if (it.id === "groq:openai/gpt-oss-120b") throw new ApiError("daily", { kind: "quota", retryAfterMs: 3_600_000 });
+    return "ok";
+  });
+  assert.deepEqual(used, ["groq:openai/gpt-oss-120b", "openai:gpt-4.1"]);
 });

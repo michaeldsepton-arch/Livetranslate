@@ -1,9 +1,12 @@
 // Picks which service/model handles each call and keeps going when one is rate-limited, out of
 // daily quota, down, or has a bad key.  Pure logic: providers are injected (easy to test).
 import { ApiError, label } from "./errors.js";
-import { pickGroqModels, pickGeminiModels, pickOpenAiModels } from "../providers/models.js";
+import { pickGroqModels, pickGeminiModels, pickOpenAiModels, isWeakModel } from "../providers/models.js";
 
 const defaultSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// When every strong model is briefly unavailable (a per-minute limit, a hiccup) wait up to this long for one, instead of
+// switching to a weaker model and changing the translation's quality and style mid-lecture.
+const STRONG_WAIT_MS = 30000;
 
 export class Router {
   /**
@@ -76,20 +79,30 @@ export class Router {
 
   chain(kind) {
     const pref = this.engines[kind] || "auto";
-    // the chosen service goes first, then the others as fallbacks (OpenAI last: it costs money, so it is only a fallback unless chosen)
-    const first = pref === "gemini" || pref === "openai" ? pref : pref === "auto" && this.preferGemini ? "gemini" : "groq";
+    // the chosen service goes first, then the others as fallbacks.  "Auto" starts with OpenAI when it has a key (it is paid, so
+    // there is no free allowance to run out), otherwise Groq.
+    const first = pref === "gemini" || pref === "openai" ? pref : pref === "auto" && this.preferGemini ? "gemini" : pref === "auto" && this.providers.openai ? "openai" : "groq";
     const order = [first, ...["groq", "gemini", "openai"].filter((p) => p !== first)];
     const items = [];
+    const weakItems = [];
     for (const p of order) {
       if (!this.providers[p] || this.dead.has(p)) continue;
       let models = this.models[p][kind];
       if (p === "groq" && kind === "stt" && pref === "groq-turbo") models = [...models].sort((a, b) => Number(/turbo/.test(b)) - Number(/turbo/.test(a)));
       for (const model of models) {
         const id = `${p}:${model}`;
-        if (!this.bad.has(id)) items.push({ provider: p, model, id });
+        if (this.bad.has(id)) continue;
+        const weak = isWeakModel(p, kind, model) && !this.isOverride(p, kind, model);
+        (weak ? weakItems : items).push({ provider: p, model, id, weak });
       }
     }
-    return items;
+    return [...items, ...weakItems]; // every strong model of every service before any weak one
+  }
+
+  /** A model the user typed in Settings is always trusted. */
+  isOverride(provider, kind, model) {
+    const o = this.overrides || {};
+    return model === (provider === "groq" ? o[kind] : o[provider]);
   }
 
   notice(code, level, text) {
@@ -119,7 +132,18 @@ export class Router {
         await this.sleep(Math.min(wait, 15000));
         continue;
       }
-      const item = ready[0];
+      if (!ready.some((it) => !it.weak)) {
+        const strong = chain.filter((it) => !it.weak);
+        if (strong.length) {
+          const soonest = Math.min(...strong.map((it) => Math.max((this.cool.get(it.id) || 0) - t, pace(it))));
+          if (soonest <= STRONG_WAIT_MS && this.now() - start + soonest <= maxWaitMs) {
+            if (soonest >= 3000) this.notice("rate", "warn", `Waiting ${Math.ceil(soonest / 1000)}s for the main model`);
+            await this.sleep(Math.max(300, Math.min(soonest, 15000)));
+            continue;
+          }
+        }
+      }
+      const item = ready.find((it) => !it.weak) || ready[0];
       if (this.usage) this.usage.touch(item.id);
       try {
         const value = await fn(item);

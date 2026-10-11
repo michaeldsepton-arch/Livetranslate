@@ -59,3 +59,16 @@ export function pickGeminiModels(available) {
   const list = ids.length ? ids : fallback;
   return { stt: list, llm: list };
 }
+
+// Quality tiers.  Mixing a strong model with a small one inside one lecture makes the English jump in style and
+// accuracy, so the weaker models are only ever a last resort (see Router.run); unknown models count as strong.
+const WEAK = {
+  groq: { stt: /^$/, llm: /llama-3\.3-70b|qwen3-32b|gpt-oss-20b|llama-4-scout|llama-3\.1-8b/ },
+  gemini: { stt: /lite/, llm: /lite/ },
+  openai: { stt: /mini-transcribe/, llm: /mini|nano/ },
+};
+
+export function isWeakModel(provider, kind, model) {
+  const re = WEAK[provider] && WEAK[provider][kind];
+  return !!(re && re.test(model));
+}
