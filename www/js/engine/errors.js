@@ -4,8 +4,9 @@ export class ApiError extends Error {
   /**
    * kind: auth | rate | quota | server | network | model | bad_request | too_large | aborted | unknown
    */
-  constructor(message, { status = 0, kind = "unknown", retryAfterMs = 0, provider = "" } = {}) {
+  constructor(message, { status = 0, kind = "unknown", retryAfterMs = 0, provider = "", credit = false } = {}) {
     super(message);
+    this.credit = credit; // the account is out of credit / at its spending limit (adding money fixes it; waiting does not)
     this.name = "ApiError";
     this.status = status;
     this.kind = kind;
@@ -46,6 +47,12 @@ function errorMessage(bodyText) {
   }
 }
 
+const CREDIT = {
+  openai: /insufficient_quota|billing_hard_limit_reached|billing_not_active/i,
+  gemini: /prepayment credits|credits? (?:are|have been) (?:depleted|exhausted)|spending cap/i,
+  groq: /spend(?:ing)? limit|insufficient (?:funds|credit|balance)/i,
+};
+
 /** Turn an HTTP failure into an ApiError. `headers` is a Headers-like (has .get) or null. */
 export function classifyHttp(provider, status, bodyText, headers) {
   const message = errorMessage(bodyText);
@@ -58,8 +65,10 @@ export function classifyHttp(provider, status, bodyText, headers) {
   // a key that can list models but not make requests (OpenAI "Read only" / restricted keys)
   if ((status === 401 || status === 403) && /insufficient permissions|missing scopes?/i.test(message + (bodyText || "")))
     return new ApiError(`${label(provider)} key is not allowed to make requests (it looks like a "Read only" or restricted key). Create a new key with "All" permissions.`, { ...opts, kind: "auth" });
-  // OpenAI: out of credit is a billing problem, not a speed limit; a model your project can't use is just skipped
-  if (/insufficient_quota|exceeded your current quota/i.test(bodyText || "")) return new ApiError(`${label(provider)} credit has run out. Add credit in your ${label(provider)} billing page.`, { ...opts, kind: "quota", retryAfterMs: 30 * 60000 });
+  // Out of credit is a billing problem, not a speed limit: waiting will not fix it, adding money does.  (Each service words it its
+  // own way; Gemini's ordinary "exceeded your current quota" is just a rate limit, so it is not matched.)
+  if (status === 402 || (CREDIT[provider] && CREDIT[provider].test((bodyText || "") + " " + message)))
+    return new ApiError(`${label(provider)} credit has run out (or its spending limit was reached).`, { ...opts, kind: "quota", retryAfterMs: 30 * 60000, credit: true });
   if (status === 403 && /access to model|model_not_found/i.test(message + (bodyText || ""))) return new ApiError(`Model unavailable: ${message}`, { ...opts, kind: "model" });
   if (status === 401) return new ApiError(`${label(provider)} rejected the API key. ${message}`, { ...opts, kind: "auth" });
   if (status === 403) return new ApiError(`${label(provider)} refused access (key or region). ${message}`, { ...opts, kind: "auth" });

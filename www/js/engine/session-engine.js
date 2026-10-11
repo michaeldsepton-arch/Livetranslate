@@ -194,7 +194,7 @@ export class LectureEngine extends Emitter {
     if (ae.kind === "aborted" || this.stopped) return this._drop(e);
     if (ae.kind === "auth") {
       e.state = "error"; // keep the audio; resume() re-queues it once the key is fixed
-      e.error = "Waiting for a working API key";
+      e.error = ae.credit ? "Waiting for credit — add some, then tap Retry" : "Waiting for a working API key";
       this.emit("entry", e);
       this._halt(ae.message);
       return;

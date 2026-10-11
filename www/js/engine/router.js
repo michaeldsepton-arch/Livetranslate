@@ -31,6 +31,7 @@ export class Router {
     };
     this.cool = new Map(); // item id -> epoch ms until which it is skipped
     this.dead = new Set(); // providers whose key was rejected
+    this.noCredit = new Set(); // providers that reported "out of credit": left out until the user says they have added some
     this.bad = new Set(); // model ids that no longer exist
     this.lastNotice = "";
   }
@@ -66,6 +67,7 @@ export class Router {
   }
 
   reset() {
+    this.noCredit.clear();
     this.cool.clear();
     this.dead.clear();
     this.bad.clear();
@@ -86,7 +88,7 @@ export class Router {
     const items = [];
     const weakItems = [];
     for (const p of order) {
-      if (!this.providers[p] || this.dead.has(p)) continue;
+      if (!this.providers[p] || this.dead.has(p) || this.noCredit.has(p)) continue;
       let models = this.models[p][kind];
       if (p === "groq" && kind === "stt" && pref === "groq-turbo") models = [...models].sort((a, b) => Number(/turbo/.test(b)) - Number(/turbo/.test(a)));
       for (const model of models) {
@@ -105,10 +107,10 @@ export class Router {
     return model === (provider === "groq" ? o[kind] : o[provider]);
   }
 
-  notice(code, level, text) {
+  notice(code, level, text, extra = {}) {
     if (this.lastNotice === code) return;
     this.lastNotice = code;
-    this.onNotice({ code, level, text });
+    this.onNotice({ code, level, text, ...extra });
   }
 
   /**
@@ -121,7 +123,13 @@ export class Router {
     for (;;) {
       if (signal && signal.aborted) throw new ApiError("Cancelled", { kind: "aborted" });
       const chain = this.chain(kind);
-      if (!chain.length) throw new ApiError("No working API key. Add or fix your key in Settings.", { kind: "auth" });
+      if (!chain.length) {
+        if (this.noCredit.size) {
+          const who = [...this.noCredit].map(label).join(" and ");
+          throw new ApiError(`${who} credit has run out. Add credit, then tap Retry.`, { kind: "auth", credit: true });
+        }
+        throw new ApiError("No working API key. Add or fix your key in Settings.", { kind: "auth" });
+      }
       const t = this.now();
       const pace = (it) => (this.usage ? this.usage.pace(it.id) : 0);
       const ready = chain.filter((it) => (this.cool.get(it.id) || 0) <= t && pace(it) === 0);
@@ -162,6 +170,12 @@ export class Router {
             this.bad.add(item.id);
             continue;
           case "quota":
+            if (e.credit) {
+              this.noCredit.add(item.provider);
+              const others = [...new Set(this.chain(kind).map((it) => label(it.provider)))];
+              this.notice(`credit-${item.provider}`, others.length ? "warn" : "error", others.length ? `${label(item.provider)} credit has run out — now using ${others.join(" / ")}.` : `${label(item.provider)} credit has run out. Add credit, then tap Retry.`, { provider: item.provider, credit: true });
+              continue;
+            }
             this.cool.set(item.id, t + Math.max(e.retryAfterMs, 30 * 60000));
             this.notice(`quota-${item.id}`, "warn", item.provider === "openai" ? "OpenAI credit has run out — switching to the other services." : `Daily limit reached on ${item.model} — switching.`);
             continue;

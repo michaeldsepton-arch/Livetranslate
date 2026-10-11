@@ -358,3 +358,10 @@ details.adv { margin-top: 6px; } details.adv summary { cursor: pointer; font-siz
 .st-lang, .st-none { margin-top: 4px; font-size: 12px; color: var(--text-faint); }
 .st-err { margin-top: 6px; font-size: 12.5px; color: var(--coral); font-weight: 600; }
 .st-sub { margin: 14px 0 -2px; font-size: 12.5px; font-weight: 650; color: var(--text-dim); }
+
+/* ---- out-of-credit banner ---- */
+.credit-bar { margin: 8px 14px 0; padding: 10px 12px; border-radius: 14px; background: rgba(231, 111, 81, 0.14); border: 1px solid rgba(231, 111, 81, 0.55); display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; line-height: 1.4; }
+.credit-bar[hidden] { display: none; }
+.credit-bar .cb-text { display: flex; gap: 8px; align-items: flex-start; font-weight: 600; }
+.credit-bar .cb-text svg { width: 18px; height: 18px; flex: none; margin-top: 1px; color: var(--coral); }
+.credit-bar .cb-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

@@ -4,6 +4,9 @@ import { icon } from "./icons.js";
 import { TranscriptView } from "./transcript-view.js";
 import { viewToolbar, statusPill, fmtElapsed } from "./common.js";
 import { allowanceChip } from "./usage.js";
+import { GROQ_BILLING_URL, GEMINI_BILLING_URL, OPENAI_BILLING_URL } from "./setup.js";
+
+const BILLING = { groq: GROQ_BILLING_URL, gemini: GEMINI_BILLING_URL, openai: OPENAI_BILLING_URL };
 
 export function buildLive(app, screen) {
   const pill = statusPill();
@@ -33,7 +36,23 @@ export function buildLive(app, screen) {
     allowanceChip(app)
   );
 
-  screen.append(header, toolbar, scroll, jump, strip);
+  // shown while a service says it is out of credit; stays until the user adds some and taps Retry (or dismisses it)
+  const creditBar = h("div", { class: "credit-bar", role: "alert", hidden: true });
+  function renderCredit() {
+    const c = app.credit;
+    creditBar.hidden = !c;
+    if (!c) return creditBar.replaceChildren();
+    const url = BILLING[c.provider];
+    creditBar.replaceChildren(
+      h("div", { class: "cb-text" }, icon("alert"), h("span", {}, c.text + (c.halted ? " The lecture waits until then — nothing is lost." : ""))),
+      h("div", { class: "cb-actions" },
+        url ? h("a", { class: "btn small primary", href: url, target: "_blank", rel: "noopener" }, "Add credit") : null,
+        h("button", { class: "btn small", onclick: () => app.retryAfterCredit() }, "I've added credit — retry"),
+        h("button", { class: "icon-btn", "aria-label": "Dismiss", onclick: () => app.dismissCredit() }, icon("x")))
+    );
+  }
+
+  screen.append(header, creditBar, toolbar, scroll, jump, strip);
 
   const view = new TranscriptView(transcriptEl, { onRetry: (id) => app.retryEntry(id) });
 
@@ -102,6 +121,7 @@ export function buildLive(app, screen) {
 
   function renderStatus() {
     const { phase, health } = app;
+    if (app.credit) return pill.set(app.credit.halted ? "err" : "warn", "Out of credit");
     if (health.level === "err") return pill.set("err", "Needs attention");
     if (health.level === "warn" && app.active) return pill.set("warn", health.text.startsWith("No internet") ? "Offline" : "Limit reached");
     const map = {
@@ -145,6 +165,8 @@ export function buildLive(app, screen) {
     renderBody();
   });
   app.on("health", renderStatus);
+  app.on("credit", () => { renderCredit(); renderStatus(); });
+  renderCredit();
   app.on("settings", () => { renderStatus(); if (!app.entries.length && app.phase === "idle") renderEmpty(); });
   app.on("speech", renderGhost);
   app.on("clock", (n) => (timerText.textContent = fmtElapsed(n)));

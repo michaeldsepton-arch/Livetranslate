@@ -4,7 +4,7 @@ import { icon } from "./icons.js";
 import { buildLive } from "./live.js";
 import { buildLibrary, buildReader } from "./library.js";
 import { buildSettings } from "./settings.js";
-import { openKeySetup } from "./setup.js";
+import { openKeySetup, GROQ_BILLING_URL, GEMINI_BILLING_URL, OPENAI_BILLING_URL } from "./setup.js";
 import { openSheet, confirmSheet, closeTopSheet, toast } from "./overlay.js";
 import * as platform from "../platform.js";
 
@@ -93,6 +93,20 @@ export function buildShell(app) {
 
   app.on("need-key", () => openKeySetup(app));
   app.on("halt", (msg) => {
+    const c = app.credit;
+    if (c && c.halted) {
+      // out of credit: adding some fixes it, so say that instead of sending people to hunt for a key problem
+      const url = { groq: GROQ_BILLING_URL, gemini: GEMINI_BILLING_URL, openai: OPENAI_BILLING_URL }[c.provider];
+      openSheet((close) => [
+        h("h3", {}, "Out of credit"),
+        h("p", {}, msg.replace(/ Add credit, then tap Retry\.?$/, "") + " Nothing is lost: your recording is paused in the queue and continues as soon as you add credit and tap Retry."),
+        h("div", { class: "stack" },
+          url ? h("a", { class: "btn primary block", href: url, target: "_blank", rel: "noopener" }, "Add credit") : null,
+          h("button", { class: "btn block", onclick: () => { close(); app.retryAfterCredit(); } }, "I've added credit — retry"),
+          h("button", { class: "btn block", onclick: close }, "Not now")),
+      ]);
+      return;
+    }
     openSheet((close) => [
       h("h3", {}, "Your key needs attention"),
       h("p", {}, msg + " Nothing is lost — your recording is paused in the queue and will continue as soon as the key works."),

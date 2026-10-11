@@ -38,6 +38,7 @@ export class App extends Emitter {
     this.level = 0;
     this.speaking = false;
     this.health = { level: "idle", text: "" };
+    this.credit = null; // {provider, text, halted} while a service reports it is out of credit
     this.isDemo = false;
     this.autoPaused = false;
     this.usage = new UsageTracker();
@@ -91,19 +92,38 @@ export class App extends Emitter {
     });
   }
 
-  async resumeEngine() {
+  async resumeEngine(message = "Trying again with your updated key…") {
     const router = this.buildRouter();
     await router.init();
     this.engine.resume(router);
     this._setHealth("ok", "");
-    toast("Trying again with your updated key…", { kind: "ok" });
+    toast(message, { kind: "ok" });
+  }
+
+  /** "I've added credit": forget the alert and try every service again. */
+  async retryAfterCredit() {
+    this.credit = null;
+    this.emit("credit", null);
+    if (this.engine) await this.resumeEngine("Trying again…");
+    else this._setHealth("ok", "");
+  }
+
+  dismissCredit() {
+    this.credit = null;
+    this.emit("credit", null);
   }
 
   _notice(n) {
+    if (n.credit) {
+      this.credit = { provider: n.provider, text: n.text, halted: n.level === "error" }; // stays on screen until the user acts
+      this.emit("credit", this.credit);
+    }
     if (n.code === "ok") return this._setHealth("ok", "");
     if (n.level === "error") this._setHealth("err", n.text);
     else this._setHealth("warn", n.text);
-    if (n.text) toast(n.text, { kind: n.level === "error" ? "err" : "warn", ms: 6000 });
+    // (an out-of-credit alert already has its own banner, and a sheet when the lecture has to wait)
+    const covered = n.credit || (n.code === "halt" && this.credit && this.credit.halted);
+    if (n.text && !covered) toast(n.text, { kind: n.level === "error" ? "err" : "warn", ms: 6000 });
   }
 
   _setHealth(level, text) {
