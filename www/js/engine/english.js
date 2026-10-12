@@ -187,3 +187,31 @@ export function needsStop(prev, next) {
   if (!last || OPEN_ENDINGS.has(last.toLowerCase())) return false;
   return true;
 }
+
+// ---- tidying -----------------------------------------------------------------------------------------------------------------------
+const ABBREVIATIONS = new Set("e.g i.e vs etc cf no st dr mr mrs ms prof approx ca".split(" "));
+
+/**
+ * Small, safe fixes to English text: spacing around punctuation, a space between a full stop and the next sentence, and a capital
+ * letter where a new sentence starts.  (Anything that needs judgement - where a sentence ends - is left to the translator.)
+ */
+export function tidyPunctuation(text) {
+  let t = (text || "").replace(/\s+/g, " ").trim();
+  if (!t) return t;
+  t = t.replace(/\s+([,.;:!?])/g, "$1").replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+  t = t.replace(/([a-z]{2,}[.!?])(?=[A-Z][a-z])/g, "$1 "); // "Allah.He said" -> "Allah. He said"
+  t = t.replace(/([.!?]\s+)(["“‘(]?)([a-z])/g, (m, stop, open, ch, offset) => { // (a stop inside a closing quotation mark may not end the outer sentence)
+    const before = t.slice(0, offset + 1).match(/([A-Za-z.]+)[.!?]$/);
+    if (before && ABBREVIATIONS.has(before[1].toLowerCase().replace(/\.$/, ""))) return m;
+    return stop + open + ch.toUpperCase();
+  });
+  return t;
+}
+
+/** Capitalise the first letter when the piece before ended a sentence. */
+export function capitalizeAfterStop(prev, next) {
+  const n = (next || "").trimStart();
+  if (!/[.!?]\s*$/.test((prev || "").trim()) || !/^[a-z]/.test(n)) return next;
+  const lead = next.length - n.length;
+  return next.slice(0, lead) + n[0].toUpperCase() + n.slice(1);
+}

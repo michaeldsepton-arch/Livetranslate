@@ -345,7 +345,7 @@ test("the engine closes the sentence before a piece that starts a new one (same 
   for (let i = 0; i < 3; i++) { engine.ingestChunk(chunk(i, 300 + i * 10)); await settled(engine); }
   assert.equal(engine.entries[0].en, "The Prophet ﷺ said that Allah loves kindness.", "the stop was added after the piece, once the next one began a sentence");
   assert.equal(engine.entries[1].en, "He gives for kindness what He does not give for harshness.");
-  assert.equal(engine.entries[2].en, "the hour will not come until");
+  assert.equal(engine.entries[2].en, "The hour will not come until", "and a piece that follows a finished sentence starts with a capital");
 });
 
 test("a stop is never added across a change of speaker", async () => {
@@ -377,4 +377,18 @@ test("translated pieces get the same treatment: the sheikh's sentence is closed 
   for (let i = 0; i < 2; i++) { engine.ingestChunk(chunk(i, 300 + i * 10)); await settled(engine); }
   assert.equal(engine.entries[0].en, "O Allah, forgive us and all the Muslims.");
   assert.equal(engine.entries[1].en, "To proceed: Al-Hafiz al-Mundhiri says in his book");
+});
+
+import { tidyPunctuation, capitalizeAfterStop } from "../www/js/engine/english.js";
+
+test("punctuation tidying: spacing, a space after a full stop, a capital where a sentence starts; abbreviations and mid-sentence words are left alone", () => {
+  assert.equal(tidyPunctuation("Muslims. the Prophet ﷺ made it clear  that it will tremble . and then he left"), "Muslims. The Prophet ﷺ made it clear that it will tremble. And then he left");
+  assert.equal(tidyPunctuation("Allah knows.He said so (RA ) today"), "Allah knows. He said so (RA) today");
+  assert.equal(tidyPunctuation("Scholars (e.g. the imams) agree. al-Hafiz said it"), "Scholars (e.g. the imams) agree. Al-Hafiz said it");
+  assert.equal(tidyPunctuation("until al-Lat and al-Uzza are worshipped"), "until al-Lat and al-Uzza are worshipped", "mid-sentence lowercase is untouched");
+  assert.equal(tidyPunctuation('He said: "I did not create the jinn." and then he left'), 'He said: "I did not create the jinn." and then he left', "a stop inside a closing quotation mark may not end the sentence");
+  assert.equal(tidyPunctuation(""), "");
+  assert.equal(capitalizeAfterStop("It ended.", "and then"), "And then");
+  assert.equal(capitalizeAfterStop("It did not end", "and then"), "and then");
+  assert.equal(capitalizeAfterStop("It ended.", "Already capital"), "Already capital");
 });

@@ -16,7 +16,7 @@ import { cleanTranscript, stripPrimerEcho } from "./hallucination.js";
 import { ApiError } from "./errors.js";
 import { scriptLang, langCode, ARABIC_LOOKALIKES, lastWords } from "./arabic.js";
 import { buildSystemPrompt, buildUserPrompt, cleanTranslation } from "./prompts.js";
-import { looksLikeEnglish, looksTransliterated, splitByLanguage, englishizeFormulae, englishWords, knownTermShare, needsStop } from "./english.js";
+import { looksLikeEnglish, looksTransliterated, splitByLanguage, englishizeFormulae, englishWords, knownTermShare, needsStop, tidyPunctuation, capitalizeAfterStop } from "./english.js";
 import { DELAY_PRESETS } from "../settings.js";
 import { MIN_BILLED_AUDIO_SEC } from "./limits.js";
 
@@ -280,9 +280,12 @@ export class LectureEngine extends Emitter {
     for (let j = i - 1; j >= 0; j--) {
       const p = this.entries[j];
       if (p.state === "transcribing" || (p.state === "error" && !p.en && !p.ar)) continue; // speaker not known yet: look past it
-      if (p.kind === e.kind && p.state === "done" && p.en && needsStop(p.en, e.en)) {
-        p.en = p.en.replace(/\s+$/, "") + ".";
-        this.emit("entry", p);
+      if (p.kind === e.kind && p.state === "done" && p.en) {
+        if (needsStop(p.en, e.en)) {
+          p.en = p.en.replace(/\s+$/, "") + ".";
+          this.emit("entry", p);
+        }
+        e.en = capitalizeAfterStop(p.en, e.en); // after a full stop the next sentence starts with a capital
       }
       return;
     }
@@ -293,7 +296,7 @@ export class LectureEngine extends Emitter {
     let text = run.text;
     if (scriptLang(text) === "en") {
       e.kind = "interpreter";
-      e.en = englishizeFormulae(text, this.settings.honorifics); // "صلى الله عليه وسلم" said in English speech -> ﷺ
+      e.en = tidyPunctuation(englishizeFormulae(text, this.settings.honorifics)); // "صلى الله عليه وسلم" said in English speech -> ﷺ
       e.state = "done";
       this._closeSentenceBefore(e);
       // everything the sheikh said before the interpreter began no longer needs to wait for look-ahead

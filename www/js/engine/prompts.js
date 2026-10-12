@@ -1,5 +1,6 @@
 // Builds the instructions + context sent to the translation model.
 import { lastWords } from "./arabic.js";
+import { tidyPunctuation } from "./english.js";
 
 const BASE = `You are the live interpreter for an Islamic lecture. Translate the Arabic speech-recognition text (CURRENT) into clear, faithful English for a reader following in real time.
 
@@ -69,5 +70,5 @@ export function cleanTranslation(raw) {
   t = t.replace(/^\s*(?:CURRENT\s*[:\-]|translation\s*[:\-]|english\s*[:\-])\s*/i, "");
   t = t.replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g, " ").trim();
   if (/^["“].*["”]$/.test(t) && !/["“].*["“”]/.test(t.slice(1, -1))) t = t.slice(1, -1).trim();
-  return t;
+  return tidyPunctuation(t);
 }
