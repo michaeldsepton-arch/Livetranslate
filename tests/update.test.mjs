@@ -83,3 +83,30 @@ test("the quiet check runs at most every 6 hours, never during a lecture, and on
   // broken storage never breaks the app
   assert.equal(await autoCheck({ storage: { getItem() { throw new Error("blocked"); } }, check }), null);
 });
+
+import { watchBattery } from "../www/js/battery.js";
+
+test("low-battery heads-up: once at 20%, once more at 10%, never while charging, silent without a Battery API", async () => {
+  const state = { level: 0.8, charging: false };
+  const calls = [];
+  let tick;
+  const stop = watchBattery({ onLow: (pct, sev) => calls.push([pct, sev]), getBattery: async () => state, setTimer: (fn) => ((tick = fn), 1), clearTimer: () => {} });
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(calls, []);
+  state.level = 0.19; await tick(); await new Promise((r) => setTimeout(r, 5));
+  state.level = 0.17; await tick(); await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(calls, [[19, "low"]], "one warning, not one a minute");
+  state.level = 0.09; await tick(); await new Promise((r) => setTimeout(r, 5));
+  state.level = 0.08; await tick(); await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(calls, [[19, "low"], [9, "critical"]]);
+  stop();
+  state.level = 0.05; await tick(); await new Promise((r) => setTimeout(r, 5));
+  assert.equal(calls.length, 2, "stopped");
+
+  const charging = [];
+  watchBattery({ onLow: (p) => charging.push(p), getBattery: async () => ({ level: 0.05, charging: true }), setTimer: () => 1, clearTimer: () => {} });
+  watchBattery({ onLow: (p) => charging.push(p), getBattery: () => undefined, setTimer: () => 1, clearTimer: () => {} });
+  watchBattery({ onLow: (p) => charging.push(p), getBattery: async () => { throw new Error("denied"); }, setTimer: () => 1, clearTimer: () => {} });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(charging, []);
+});

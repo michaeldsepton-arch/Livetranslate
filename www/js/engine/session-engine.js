@@ -16,7 +16,7 @@ import { cleanTranscript, stripPrimerEcho } from "./hallucination.js";
 import { ApiError } from "./errors.js";
 import { scriptLang, langCode, ARABIC_LOOKALIKES, lastWords } from "./arabic.js";
 import { buildSystemPrompt, buildUserPrompt, cleanTranslation } from "./prompts.js";
-import { looksLikeEnglish, looksTransliterated, splitByLanguage, englishizeFormulae } from "./english.js";
+import { looksLikeEnglish, looksTransliterated, splitByLanguage, englishizeFormulae, englishWords, knownTermShare, needsStop } from "./english.js";
 import { DELAY_PRESETS } from "../settings.js";
 import { MIN_BILLED_AUDIO_SEC } from "./limits.js";
 
@@ -59,8 +59,8 @@ export class LectureEngine extends Emitter {
     this.audio = new Map(); // entry id -> wav (kept until the speech is transcribed)
     this.seq = 0;
     this.arTail = ""; // last Arabic transcribed (prompt + de-duplication)
-    this.langCheckFails = 0;
-    this.langCheckOffUntil = 0;
+    this.langCheckState = {}; // per service: failures in a row, and when it may be tried again
+    this.langCheckWarned = false;
     this.translating = false;
     this.finishing = false;
     this.halted = false;
@@ -137,17 +137,22 @@ export class LectureEngine extends Emitter {
       let { value: res, item: used } = await this.router.run("stt", call(language), { signal: this.abort.signal });
       this._recordUsage(used, secs);
       if (!language) {
+        let whisper = null; // Whisper's own reading of this chunk, when the language check ran
         if (check && !res.language) {
-          const label = await check;
-          if (label) res = { ...res, language: label };
+          whisper = await check;
+          if (whisper && whisper.language) res = { ...res, language: whisper.language };
         }
         const said = langCode(res.language);
         const script = scriptLang(res.text);
         let again = null;
         if (ARABIC_LOOKALIKES.has(said) && script === "ar") again = "ar"; // Arabic speech labelled Persian/Urdu: same script, wrong words
         else if (said === "ar" && script === "en") again = "ar"; // it "translated" instead of transcribing
-        else if (said === "en" && script === "ar") again = "en"; // English speech written out in Arabic letters
-        else if (script === "en" && !looksLikeEnglish(res.text)) again = "ar"; // Arabic recitation written in Latin letters ("Tabbat yada abin habin…")
+        else if (said === "en" && script === "ar") {
+          // English speech written out (or translated) in Arabic letters: Whisper already has the English, so use that
+          if (whisper && this._englishFits(whisper.res.text, res.text)) res = { ...whisper.res, language: "english" };
+          else again = "en";
+        }
+        else if (script === "en" && !looksLikeEnglish(res.text) && (said !== "en" || knownTermShare(res.text) < 0.7)) again = "ar"; // Arabic recitation written in Latin letters ("Tabbat yada abin habin…").  When the recogniser plainly says English and the words are known names and terms, it is the interpreter ("Sulayman alayhis salam")
         if (again) {
           // for English, drop the Arabic primer so it cannot pull the output back into Arabic script
           const retry = (item) => this.router.providers[item.provider].transcribe(wav, { model: item.model, language: again, prompt: again === "en" ? "" : promptFor(item), signal: this.abort.signal });
@@ -155,7 +160,7 @@ export class LectureEngine extends Emitter {
           this._recordUsage(again2.item, secs);
           // a wrong guess about the language must never replace good text with a translation or transliteration of it
           const redo = (again2.value.text || "").trim();
-          const sane = again === "en" ? scriptLang(redo) === "en" && looksLikeEnglish(redo) : scriptLang(redo) === "ar";
+          const sane = again === "en" ? this._englishFits(redo, res.text) : scriptLang(redo) === "ar";
           if (sane || !res.text.trim()) res = again2.value;
         }
       }
@@ -165,28 +170,55 @@ export class LectureEngine extends Emitter {
     }
   }
 
-  /** The language of a chunk as Whisper hears it ("en", "ar", …), or "" when it cannot be had (never throws, never delays a lecture for long). */
+  /**
+   * Is `english` plausibly what was said in the same chunk that came back as `arabic` text?  (Guards against a wrong "English"
+   * label turning real Arabic recitation into a transliteration: a different number of words, or a long run of transliterated
+   * Arabic, means it is not the same speech.)
+   */
+  _englishFits(english, arabic) {
+    const t = (english || "").trim();
+    if (!t || scriptLang(t) !== "en" || NOISE_ENGLISH.test(t)) return false;
+    const gw = englishWords(t).length;
+    const aw = (arabic || "").split(/\s+/).filter(Boolean).length;
+    if (aw && (gw < aw * 0.5 || gw > aw * 4)) return false;
+    return gw <= 4 || !looksTransliterated(t);
+  }
+
+  /**
+   * Whisper's reading of a chunk - its language label and its own text - or null.  gpt-4o-transcribe says nothing about the language it
+   * heard, and with an interpreter in the room it sometimes writes English in Arabic letters; this is the second opinion.  Tries the
+   * cheap Groq turbo model first, then OpenAI's whisper-1, so a rate-limited free Groq key cannot switch it off.  Never throws.
+   */
   async _langCheck(wav, secs) {
-    if (this.langCheckOffUntil > this.now()) return "";
     const { providers, dead, models } = this.router;
-    let pick = null;
+    const candidates = [];
     if (providers.groq && !dead.has("groq")) {
       const list = (models && models.groq && models.groq.stt) || [];
-      pick = { provider: "groq", model: list.find((m) => /turbo/.test(m)) || list[0] || "whisper-large-v3-turbo" };
-    } else if (providers.openai && !dead.has("openai")) pick = { provider: "openai", model: "whisper-1" };
-    if (!pick) return "";
-    try {
-      const r = await providers[pick.provider].transcribe(wav, { model: pick.model, signal: this.abort.signal });
-      this._recordUsage({ provider: pick.provider, id: `${pick.provider}:${pick.model}` }, secs);
-      this.langCheckFails = 0;
-      return langCode(r.language);
-    } catch {
-      if (!this.stopped && ++this.langCheckFails >= 3) {
-        this.langCheckOffUntil = this.now() + 5 * 60000; // keep going without it for a while rather than stall on a failing service
-        this.langCheckFails = 0;
-      }
-      return "";
+      candidates.push({ provider: "groq", model: list.find((m) => /turbo/.test(m)) || list[0] || "whisper-large-v3-turbo" });
     }
+    if (providers.openai && !dead.has("openai")) candidates.push({ provider: "openai", model: "whisper-1" });
+    for (const c of candidates) {
+      const st = (this.langCheckState[c.provider] ||= { fails: 0, offUntil: 0 });
+      if (st.offUntil > this.now()) continue;
+      try {
+        const r = await providers[c.provider].transcribe(wav, { model: c.model, signal: this.abort.signal });
+        this._recordUsage({ provider: c.provider, id: `${c.provider}:${c.model}` }, secs);
+        st.fails = 0;
+        this.langCheckWarned = false;
+        return { language: langCode(r.language), res: r };
+      } catch {
+        if (this.stopped) return null;
+        if (++st.fails >= 3) {
+          st.offUntil = this.now() + 5 * 60000; // rest this one for a few minutes instead of failing every chunk
+          st.fails = 0;
+        }
+      }
+    }
+    if (candidates.length && candidates.every((c) => (this.langCheckState[c.provider] || {}).offUntil > this.now()) && !this.langCheckWarned) {
+      this.langCheckWarned = true;
+      this.emit("notice", { level: "warn", info: true, code: "langcheck", text: "The language check isn't responding, so the interpreter may be mixed in with the sheikh for a while." });
+    }
+    return null;
   }
 
   _sttFailed(e, err) {
@@ -215,9 +247,12 @@ export class LectureEngine extends Emitter {
     text = stripPrimerEcho(text, { allowOpening: e.t0 < 120 }); // the recogniser reading its own hint back
     // One chunk can hold the end of the sheikh and the start of the interpreter (or the other way round):
     // give each language its own entry instead of one label for the lot.
+    const labelledEnglish = langCode(res.language) === "en";
     const runs = splitByLanguage(text).filter((r) => {
       const lang = scriptLang(r.text);
-      if (lang === "en") return !NOISE_ENGLISH.test(r.text.trim()) && looksLikeEnglish(r.text); // not a phantom phrase, nor Arabic spelled in Latin letters
+      // not a phantom phrase, nor Arabic spelled in Latin letters; a piece the recogniser labelled English may be mostly names and
+      // terms ("Sulayman alayhis salam", "Allah subhanahu wa ta'ala") and is kept unless it is a long run of transliteration
+      if (lang === "en") return !NOISE_ENGLISH.test(r.text.trim()) && (looksLikeEnglish(r.text) || (labelledEnglish && knownTermShare(r.text) >= 0.7));
       return lang === "ar";
     });
     if (!runs.length) return this._drop(e);
@@ -239,6 +274,20 @@ export class LectureEngine extends Emitter {
     this._pump();
   }
 
+  /** If this piece starts a new sentence and the one before it (same speaker) was left without its full stop, add the stop. */
+  _closeSentenceBefore(e) {
+    const i = this.entries.indexOf(e);
+    for (let j = i - 1; j >= 0; j--) {
+      const p = this.entries[j];
+      if (p.state === "transcribing" || (p.state === "error" && !p.en && !p.ar)) continue; // speaker not known yet: look past it
+      if (p.kind === e.kind && p.state === "done" && p.en && needsStop(p.en, e.en)) {
+        p.en = p.en.replace(/\s+$/, "") + ".";
+        this.emit("entry", p);
+      }
+      return;
+    }
+  }
+
   /** Fill one entry with one run of speech: Arabic (the sheikh, to be translated) or English (the interpreter). */
   _commitRun(e, run) {
     let text = run.text;
@@ -246,6 +295,7 @@ export class LectureEngine extends Emitter {
       e.kind = "interpreter";
       e.en = englishizeFormulae(text, this.settings.honorifics); // "صلى الله عليه وسلم" said in English speech -> ﷺ
       e.state = "done";
+      this._closeSentenceBefore(e);
       // everything the sheikh said before the interpreter began no longer needs to wait for look-ahead
       for (const x of this.entries) if (x.seq < e.seq && x.state === "awaiting") x.forceReady = true;
       this.emit("entry", e);
@@ -358,6 +408,7 @@ export class LectureEngine extends Emitter {
       e.en = en;
       e.model = item.id;
       e.state = "done";
+      this._closeSentenceBefore(e);
       this.emit("entry", e);
     } catch (err) {
       const ae = ApiError.from(err);

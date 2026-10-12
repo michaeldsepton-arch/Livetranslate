@@ -179,7 +179,7 @@ test("interpreter English that gpt-4o wrote in Arabic letters is re-read as Engl
   assert.equal(o.calls.chat.length + g.calls.chat.length, 0, "never translated");
   assert.ok(g.calls.transcribe[0].model.includes("turbo"), "the language check uses the cheap turbo model");
   assert.equal(g.calls.transcribe[0].prompt, undefined, "and no primer, so there is nothing for it to echo");
-  assert.deepEqual(o.calls.transcribe.map((c) => c.language), [undefined, "en"], "second read is told it is English");
+  assert.deepEqual(o.calls.transcribe.map((c) => c.language), [undefined], "Whisper's own English is used: no second gpt-4o read is needed");
 });
 
 test("real Arabic is untouched by the language check", async () => {
@@ -208,10 +208,11 @@ test("a wrong 'English' label never replaces real Arabic with a transliteration"
 test("language check failing or switched off: lectures carry on exactly as before", async () => {
   let calls = 0;
   const SENTENCES = ["الكبر من أمراض القلوب الخطيرة جدا", "والمتواضع هو المحسن إلى الناس", "لا يدخل الجنة من كان في قلبه كبر", "العلم يورث الخشية والتواضع", "أقرب ما يكون العبد من ربه وهو ساجد"];
-  const failing = twoServices({ openai: (_w, _o, n) => ({ text: SENTENCES[(n - 1) % 5], language: "", segments: [] }), groq: () => { calls++; throw new Error("down"); } });
+  let said = 0;
+  const failing = twoServices({ openai: (_w, o) => (o.model === "whisper-1" ? { text: "x", language: "arabic", segments: [] } : { text: SENTENCES[said++ % 5], language: "", segments: [] }), groq: () => { calls++; throw new Error("down"); } });
   for (let i = 0; i < 5; i++) { failing.engine.ingestChunk(chunk(i, 300 + i * 10)); await settled(failing.engine); }
   assert.equal(failing.engine.entries.filter((e) => e.kind === "lecture").length, 5, "every chunk still transcribed");
-  assert.equal(calls, 3, "after three failures the check rests for a few minutes instead of stalling every chunk");
+  assert.equal(calls, 3, "after three failures Groq rests for a few minutes instead of failing every chunk (OpenAI's whisper-1 covers meanwhile)");
 
   const off = twoServices({ openai: () => ({ text: "الكبر من أمراض القلوب الخطيرة جدا", language: "", segments: [] }), groq: () => ({ text: "x", language: "english", segments: [] }), settings: { languageCheck: false } });
   off.engine.ingestChunk(chunk(0, 300));
@@ -233,11 +234,147 @@ test("with only OpenAI, whisper-1 gives the label; engines that already label th
   engine.ingestChunk(chunk(0, 300));
   await settled(engine);
   assert.equal(engine.entries[0].kind, "interpreter");
-  assert.equal(engine.entries[0].en, "Hello there everyone");
+  assert.equal(engine.entries[0].en, "hello there", "Whisper's own English, no second read");
   assert.ok(o.calls.transcribe.some((c) => c.model === "whisper-1"));
+  assert.equal(o.calls.transcribe.filter((c) => c.model === "gpt-4o-transcribe").length, 1);
 
   const groqOnly = setup({ stt: say("الكبر من أمراض القلوب الخطيرة جدا") });
   groqOnly.engine.ingestChunk(chunk(0, 300));
   await settled(groqOnly.engine);
   assert.equal(groqOnly.provider.calls.transcribe.length, 1, "no extra call for a service that is not label-less");
+});
+
+test("the language check falls back to OpenAI's whisper-1 when Groq cannot answer, so a rate-limited free Groq key does not switch it off", async () => {
+  const { engine, g, o } = twoServices({
+    openai: (_w, opts) => (opts.model === "whisper-1" ? { text: "Sulayman alayhis salam", language: "english", segments: [] } : { text: "سليمان عليه السلام", language: "", segments: [] }),
+    groq: () => { throw new ApiError("rate", { kind: "rate" }); },
+  });
+  engine.ingestChunk(chunk(0, 300));
+  await settled(engine);
+  assert.equal(g.calls.transcribe.length, 1, "Groq was tried first");
+  assert.ok(o.calls.transcribe.some((c) => c.model === "whisper-1"), "then whisper-1");
+  const e = engine.entries[0];
+  assert.equal(e.kind, "interpreter", "a short English phrase is accepted too");
+  assert.match(e.en, /^Sulayman/);
+  assert.equal(engine.entries.length, 1);
+});
+
+test("a wrong 'English' label over a long Arabic recitation is not believed (the word counts do not match)", async () => {
+  const { engine } = twoServices({
+    openai: () => ({ text: "تبت يدا أبي لهب وتب ما أغنى عنه ماله وما كسب", language: "", segments: [] }),
+    groq: () => ({ text: "Tabbat yada", language: "english", segments: [] }),
+  });
+  engine.ingestChunk(chunk(0, 300));
+  await settled(engine);
+  assert.equal(engine.entries[0].kind, "lecture");
+  assert.match(engine.entries[0].ar, /تبت يدا/);
+});
+
+test("when every language check is resting, the user is told once", async () => {
+  const notices = [];
+  const { engine } = twoServices({
+    openai: (_w, opts) => (opts.model === "whisper-1" ? (() => { throw new ApiError("x", { kind: "server" }); })() : { text: "الكبر من أمراض القلوب الخطيرة جدا", language: "", segments: [] }),
+    groq: () => { throw new ApiError("x", { kind: "server" }); },
+  });
+  engine.on("notice", (n) => notices.push(n));
+  for (let i = 0; i < 4; i++) { engine.ingestChunk(chunk(i, 300 + i * 10)); await settled(engine); }
+  const warn = notices.filter((n) => n.code === "langcheck");
+  assert.equal(warn.length, 1);
+  assert.equal(warn[0].info, true);
+  assert.match(warn[0].text, /language check isn't responding/);
+  assert.equal(engine.entries.length >= 1, true, "the lecture itself carried on");
+});
+
+test("a short English phrase of names and terms that Whisper labels English is kept as the interpreter (it used to be re-read as Arabic or dropped)", async () => {
+  const provider = fakeProvider({
+    transcribe: (_w, opts) => (opts.language === "ar" ? { text: "سليمان عليه السلام", language: "arabic", segments: [] } : { text: "Sulayman, alayhis salam", language: "english", segments: [] }),
+    chat: () => "Translated.",
+  });
+  const engine = new LectureEngine({ router: fakeRouter(provider), settings: { ...DEFAULT_SETTINGS } });
+  engine.cfg = { ...engine.cfg, lookaheadWaitMs: 0 };
+  engine.ingestChunk(chunk(0, 300));
+  await settled(engine);
+  assert.equal(engine.entries.length, 1);
+  assert.equal(engine.entries[0].kind, "interpreter");
+  assert.equal(engine.entries[0].en, "Sulayman, (AS)".replace("(AS)", "alayhis salam"));
+  assert.equal(provider.calls.transcribe.length, 1, "no forced Arabic re-read");
+  assert.equal(provider.calls.chat.length, 0);
+});
+
+test("recitation that Whisper wrongly labels English is still caught: a long run of transliteration is re-read as Arabic", async () => {
+  const provider = fakeProvider({
+    transcribe: (_w, opts) => (opts.language === "ar" ? { text: "تبت يدا أبي لهب وتب", language: "arabic", segments: [] } : { text: "Tabbat yada abi lahabin wa tabb ma aghna anhu", language: "english", segments: [] }),
+    chat: () => "Perish the hands of Abu Lahab.",
+  });
+  const engine = new LectureEngine({ router: fakeRouter(provider), settings: { ...DEFAULT_SETTINGS } });
+  engine.cfg = { ...engine.cfg, lookaheadWaitMs: 0 };
+  engine.ingestChunk(chunk(0, 300));
+  await settled(engine);
+  assert.equal(engine.entries[0].kind, "lecture");
+  assert.match(engine.entries[0].ar, /تبت يدا/);
+});
+
+import { needsStop, endsSentence } from "../www/js/engine/english.js";
+
+test("a missing full stop is added only where the next piece clearly starts a new sentence", () => {
+  // from the real file: a finished sentence glued to the next one
+  assert.equal(needsStop("O Allah, forgive us, our Shaykh, and all the Muslims", "To proceed: Al-Hafiz al-Mundhiri (RH) says"), true);
+  assert.equal(needsStop("and there are people who worship idols besides Allah (SWT)", "He mentioned that the hour will not come"), true);
+  assert.equal(needsStop("the shaytan has despaired and has given up", "Rather, he causes enmity"), true);
+  // continuations are left alone
+  assert.equal(needsStop("the Messenger said to the people of", "Makkah that"), false, "ends on a joining word");
+  assert.equal(needsStop("those who pray", "together and there is a hadith"), false, "lowercase continues");
+  assert.equal(needsStop("he went to", "Al-Baqi to visit"), false);
+  assert.equal(needsStop("because", "Allah is the Provider"), false);
+  assert.equal(needsStop("and then he said,", "What is the matter?"), false, "after a comma or colon the sentence goes on");
+  assert.equal(needsStop("he said that", "I went"), false, "a capital I is ambiguous: leave it");
+  assert.equal(needsStop("Already finished.", "Next sentence"), false);
+  assert.equal(needsStop("", "Hello"), false);
+  assert.equal(needsStop("no capital next", "…and then"), false);
+  assert.equal(endsSentence('He said, "Yes."'), true);
+  assert.equal(endsSentence("and then he"), false);
+});
+
+test("the engine closes the sentence before a piece that starts a new one (same speaker only)", async () => {
+  const texts = ["The Prophet ﷺ said that Allah loves kindness", "He gives for kindness what He does not give for harshness.", "the hour will not come until"];
+  const provider = fakeProvider({ transcribe: (_w, _o, n) => ({ text: texts[n - 1], language: "english", segments: [] }), chat: () => "x" });
+  const engine = new LectureEngine({ router: fakeRouter(provider), settings: { ...DEFAULT_SETTINGS } });
+  engine.cfg = { ...engine.cfg, lookaheadWaitMs: 0 };
+  const changed = [];
+  engine.on("entry", (e) => changed.push(e.id));
+  for (let i = 0; i < 3; i++) { engine.ingestChunk(chunk(i, 300 + i * 10)); await settled(engine); }
+  assert.equal(engine.entries[0].en, "The Prophet ﷺ said that Allah loves kindness.", "the stop was added after the piece, once the next one began a sentence");
+  assert.equal(engine.entries[1].en, "He gives for kindness what He does not give for harshness.");
+  assert.equal(engine.entries[2].en, "the hour will not come until");
+});
+
+test("a stop is never added across a change of speaker", async () => {
+  const provider = fakeProvider({
+    transcribe: (_w, _o, n) => (n === 1 ? { text: "the shaytan has despaired", language: "english", segments: [] } : { text: "الكبر من أمراض القلوب", language: "arabic", segments: [] }),
+    chat: () => "Arrogance is a disease of the heart.",
+  });
+  const engine = new LectureEngine({ router: fakeRouter(provider), settings: { ...DEFAULT_SETTINGS } });
+  engine.cfg = { ...engine.cfg, lookaheadWaitMs: 0 };
+  for (let i = 0; i < 2; i++) { engine.ingestChunk(chunk(i, 300 + i * 10)); await settled(engine); }
+  assert.equal(engine.entries[0].en, "the shaytan has despaired");
+  assert.equal(engine.entries[1].kind, "lecture");
+});
+
+test("translator is told to punctuate: real sentence breaks, no run-ons, capital for a new sentence", () => {
+  const sys = buildSystemPrompt();
+  assert.match(sys, /split the speaker's long chains/);
+  assert.match(sys, /never run-ons/);
+  assert.match(sys, /start with a capital letter even when RECENT has no full stop/);
+  assert.doesNotMatch(sys, /don't capitalise its first word or end it with a full stop/);
+});
+
+test("translated pieces get the same treatment: the sheikh's sentence is closed when the next piece begins a new one", async () => {
+  const english = ["O Allah, forgive us and all the Muslims", "To proceed: Al-Hafiz al-Mundhiri says in his book"];
+  const arabic = ["اللهم اغفر لنا وللمسلمين أجمعين", "أما بعد يقول الحافظ المنذري في كتابه"];
+  const provider = fakeProvider({ transcribe: (_w, _o, n) => ({ text: arabic[n - 1], language: "arabic", segments: [] }), chat: (_o, n) => english[n - 1] });
+  const engine = new LectureEngine({ router: fakeRouter(provider), settings: { ...DEFAULT_SETTINGS } });
+  engine.cfg = { ...engine.cfg, lookaheadWaitMs: 0 };
+  for (let i = 0; i < 2; i++) { engine.ingestChunk(chunk(i, 300 + i * 10)); await settled(engine); }
+  assert.equal(engine.entries[0].en, "O Allah, forgive us and all the Muslims.");
+  assert.equal(engine.entries[1].en, "To proceed: Al-Hafiz al-Mundhiri says in his book");
 });

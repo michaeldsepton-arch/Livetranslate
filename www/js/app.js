@@ -118,6 +118,7 @@ export class App extends Emitter {
       this.credit = { provider: n.provider, text: n.text, halted: n.level === "error" }; // stays on screen until the user acts
       this.emit("credit", this.credit);
     }
+    if (n.info) return n.text && toast(n.text, { kind: "warn", ms: 8000 });
     if (n.code === "ok") return this._setHealth("ok", "");
     if (n.level === "error") this._setHealth("err", n.text);
     else this._setHealth("warn", n.text);

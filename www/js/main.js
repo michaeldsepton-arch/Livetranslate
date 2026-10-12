@@ -2,6 +2,7 @@ import { App } from "./app.js";
 import { buildShell } from "./ui/shell.js";
 import { toast } from "./ui/overlay.js";
 import { autoCheck } from "./update.js";
+import { watchBattery } from "./battery.js";
 
 const app = new App();
 window.__app = app; // handy for debugging in a desktop browser
@@ -20,6 +21,20 @@ document.addEventListener("focusout", () => setTimeout(() => !isField(document.a
 // If the phone died or the app was swiped away mid-lecture, the autosaved transcript is still there.
 app.recoverInterrupted().then((s) => {
   if (s) toast("Recovered your unfinished lecture.", { kind: "ok", ms: 8000, action: "Open", onAction: () => app.go("reader", { id: s.id }) });
+});
+
+// While recording, a heads-up if the battery gets low (Android's Battery Saver can slow Lisan down or stop it listening).
+let stopBatteryWatch = null;
+app.on("phase", () => {
+  if (app.phase === "recording" && !stopBatteryWatch && !app.isDemo) {
+    stopBatteryWatch = watchBattery({
+      onLow: (pct, severity) =>
+        toast(`Battery ${pct}% — ${severity === "critical" ? "plug in now: " : ""}Android's Battery Saver can slow Lisan down or stop it listening. Plug in if you can.`, { kind: "warn", ms: 12000 }),
+    });
+  } else if (!app.active && stopBatteryWatch) {
+    stopBatteryWatch();
+    stopBatteryWatch = null;
+  }
 });
 
 // A quiet look for a newer version a few seconds after the app opens (never during a lecture).

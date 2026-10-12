@@ -8,6 +8,29 @@ other thank thanks please hello hi okay ok good well said say says let going go 
 because after before again always never today tonight tomorrow everyone everybody brothers sisters welcome sheikh shaykh allah prophet peace blessings
 upon praise lord worlds speaking talking explained explaining mentioned means meaning about topic lecture tonight verse chapter surah`.split(/\s+/));
 
+import { builtinGlossary } from "./glossary.js";
+
+// Latin spellings of Islamic names and terms (from the built-in glossary, plus the honorifics an interpreter says in English).
+// "Sulayman alayhis salam" has no common English words in it, but it is plainly the interpreter and not Arabic spelled in Latin letters.
+const HONORIFIC_WORDS = `alayhi alayhis alayhim alayha alayhimus salam salaam sallallahu wasallam wa sallam subhanahu ta'ala taala radiyallahu radhiallahu anhu anha anhum anhuma rahimahullah rahimahu rahimahumullah azza jalla ameen amin
+  allah rasulullah rasool messenger prophet nabi sahaba sahabah companions imam shaykh sheikh shaikh hafiz quran qur'an hadith sunnah fiqh tawhid shirk iman taqwa jannah jahannam shaytan shaitan iblis jinn ummah akhirah dunya`.split(/\s+/);
+let KNOWN_LATIN = null;
+function knownLatin() {
+  if (!KNOWN_LATIN) {
+    KNOWN_LATIN = new Set(HONORIFIC_WORDS);
+    for (const g of builtinGlossary()) for (const w of g.en.toLowerCase().match(/[a-z']+/g) || []) if (w.length >= 3) KNOWN_LATIN.add(w.replace(/^'+|'+$/g, ""));
+  }
+  return KNOWN_LATIN;
+}
+
+/** Share of words that are common English or a known Islamic name/term (0..1). */
+export function knownTermShare(text) {
+  const words = englishWords(text);
+  if (!words.length) return 0;
+  const known = knownLatin();
+  return words.filter((w) => COMMON.has(w) || known.has(w)).length / words.length;
+}
+
 export function englishWords(text) {
   return (text.toLowerCase().match(/[a-z']+/g) || []).map((w) => w.replace(/^'+|'+$/g, "")).filter(Boolean);
 }
@@ -142,4 +165,25 @@ export function englishizeFormulae(text, honorifics = "short") {
   for (const [re, short, full] of FORMULAE) t = t.replace(re, honorifics === "full" && full ? full : short);
   t = t.replace(/،/g, ",").replace(/؛/g, ";").replace(/\s+([,.;:!?])/g, "$1").replace(/\s{2,}/g, " ").trim();
   return /^[a-z]/.test(t) && AR_LETTER.test((text || "").trim()[0]) ? t[0].toUpperCase() + t.slice(1) : t; // a phrase that opened the sentence
+}
+
+// ---- sentence joins ---------------------------------------------------------------------------------------------------------------
+// Speech is cut into short pieces, and a piece that ends a sentence does not always carry its full stop ("…all the Muslims" + "To proceed:").
+// When the next piece starts a new sentence, the missing stop is added to the one before it.
+const ENDED = /[.!?…]["”’)\]]*\s*$/;
+export const endsSentence = (text) => ENDED.test((text || "").trim());
+
+// a piece that ends on one of these cannot be the end of a sentence
+const OPEN_ENDINGS = new Set(`and or but nor so yet of the a an to in on at by for from with without about into onto over under between among against during that which who whom whose where when while if because since although though unless until as than then is are was were be been being am has have had do does did will would can could may might must shall should not no his her their my our your its this these those he she they we you it me him them us who what how why there here also just very more most any some each every such`.split(/\s+/));
+
+/** Should a full stop be added to the end of `prev` because `next` starts a new sentence? */
+export function needsStop(prev, next) {
+  const a = (prev || "").trim();
+  const b = (next || "").trim();
+  if (!a || !b || endsSentence(a) || /[,;:\u2014\u2013-]$/.test(a)) return false;
+  const first = b.replace(/^["“‘(\[]+/, "").match(/^[A-Z][A-Za-z'’]*/);
+  if (!first || /^I($|['’])/.test(first[0])) return false; // lowercase: it continues; "I": ambiguous, leave it
+  const last = (a.replace(/["”’)\]]+$/, "").match(/([A-Za-z'’]+)\W*$/) || [])[1];
+  if (!last || OPEN_ENDINGS.has(last.toLowerCase())) return false;
+  return true;
 }
